@@ -174,36 +174,6 @@ export function hue(name: string): number {
   return h
 }
 
-export function TagCard({
-  name,
-  subtitle,
-  onClick,
-  art,
-  action
-}: {
-  name: string
-  subtitle: string
-  onClick: () => void
-  /** Background layer, filling the card behind the label. Falls back to the plain colour block. */
-  art?: React.ReactNode
-  action?: React.ReactNode
-}) {
-  return (
-    <div
-      className="group relative flex aspect-5/4 cursor-pointer flex-col justify-end overflow-hidden rounded-lg p-4 transition hover:brightness-110"
-      style={{ background: gradient(name) }}
-      onClick={onClick}
-    >
-      {art && <div className="absolute inset-0">{art}</div>}
-      <div className="relative pr-12">
-        <div className="line-clamp-2 text-base font-bold break-words drop-shadow-md">{name}</div>
-        <div className="mt-1 truncate text-xs text-white/75">{subtitle}</div>
-      </div>
-      {action}
-    </div>
-  )
-}
-
 export function gradient(name: string): string {
   return `linear-gradient(135deg, hsl(${hue(name)} 60% 32%), hsl(${(hue(name) + 40) % 360} 55% 18%))`
 }

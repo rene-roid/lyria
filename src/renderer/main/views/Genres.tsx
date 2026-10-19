@@ -1,10 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Play } from 'lucide-react'
 import type { Genre } from '@shared/subsonic/types'
 import { capitalize } from '@shared/format'
 import { useClient } from '@renderer/shared/sessionStore'
-import { CardGrid, TagCard } from '../components/AlbumCard'
-import { TagArt, TagArtCover } from '../components/TagArt'
+import { BrowseCard, BrowseCover, BrowseGrid, useBrowseArt } from '../components/TagArt'
 import { TrackPage } from '../components/TrackPage'
 import { Empty, ErrorBox, Loading, PageTitle, SearchInput } from '../components/ui'
 import { nav } from '../nav'
@@ -16,26 +14,16 @@ const genreRecent = (value: string) => recentOf({ name: 'genre', value }, capita
 function GenreCard({ genre }: { genre: Genre }) {
   const client = useClient()
   const name = capitalize(genre.value)
-  const play = async (e: React.MouseEvent): Promise<void> => {
-    e.stopPropagation()
-    const songs = await client?.getSongsByGenre(genre.value)
-    if (songs?.length) playFrom(songs, 0, genreRecent(genre.value))
-  }
   return (
-    <TagCard
+    <BrowseCard
+      seed={{ kind: 'genre', value: genre.value }}
       name={name}
       subtitle={`${genre.songCount ?? 0} song${genre.songCount === 1 ? '' : 's'}`}
-      art={<TagArt art={{ style: 'genre', seed: { kind: 'genre', value: genre.value } }} name={name} />}
-      onClick={() => nav.go({ name: 'genre', value: genre.value })}
-      action={
-        <button
-          onClick={play}
-          className="absolute right-3 bottom-3 flex h-10 w-10 translate-y-2 items-center justify-center rounded-full bg-accent text-black opacity-0 shadow-xl transition group-hover:translate-y-0 group-hover:opacity-100 hover:scale-105"
-          title="Play genre"
-        >
-          <Play size={18} fill="currentColor" className="ml-0.5" />
-        </button>
-      }
+      onOpen={() => nav.go({ name: 'genre', value: genre.value })}
+      onPlay={async () => {
+        const songs = await client?.getSongsByGenre(genre.value)
+        if (songs?.length) playFrom(songs, 0, genreRecent(genre.value))
+      }}
     />
   )
 }
@@ -58,7 +46,7 @@ export function Genres() {
       {state.loading && <Loading />}
       {state.error && <ErrorBox message={state.error} onRetry={state.reload} />}
       {state.data && filtered.length === 0 && <Empty>No genres match</Empty>}
-      <CardGrid>{filtered.map((g) => <GenreCard key={g.value} genre={g} />)}</CardGrid>
+      <BrowseGrid>{filtered.map((g) => <GenreCard key={g.value} genre={g} />)}</BrowseGrid>
     </div>
   )
 }
@@ -66,13 +54,15 @@ export function Genres() {
 export function GenreView({ value }: { value: string }) {
   const client = useClient()
   const state = useAsync(`genre:${value}`, () => client?.getSongsByGenre(value), [client, value])
+  const { cover, color } = useBrowseArt({ kind: 'genre', value }, capitalize(value))
   return (
     <TrackPage
       eyebrow="Genre"
       title={capitalize(value)}
       state={state}
       origin={genreRecent(value)}
-      cover={<TagArtCover art={{ style: 'genre', seed: { kind: 'genre', value } }} name={capitalize(value)} />}
+      color={color}
+      cover={<BrowseCover cover={cover} />}
     />
   )
 }

@@ -129,3 +129,12 @@ export function wheelVolumeStep(deltaY: number, deltaMode = 0): number {
   const step = (-px / NOTCH_PX) * VOLUME_PER_NOTCH
   return Math.max(-VOLUME_PER_NOTCH, Math.min(VOLUME_PER_NOTCH, step))
 }
+
+/**
+ * Whether an album carries a mood tag, ignoring case: taggers disagree on "Energetic" and
+ * "energetic", and the two are one mood, not two cards and two half-sized mixes.
+ */
+export function hasMood(album: { moods?: string[] }, mood: string): boolean {
+  const want = mood.toLowerCase()
+  return album.moods?.some((m) => m.toLowerCase() === want) ?? false
+}

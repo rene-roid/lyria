@@ -1,6 +1,6 @@
 import type { AlbumID3, ArtistID3 } from '@shared/subsonic/types'
 import type { SubsonicClient } from '@shared/subsonic/client'
-import { parseDiscName } from '@shared/format'
+import { hasMood, parseDiscName } from '@shared/format'
 import { pushRecent, viewKey, type RecentItem, type Track, type View } from '@shared/types'
 import { create } from 'zustand'
 import { player, usePlayerState } from '@renderer/shared/playerStore'
@@ -88,7 +88,7 @@ export async function loadRecent(c: SubsonicClient, r: RecentItem): Promise<Trac
     case 'genre':
       return c.getSongsByGenre(v.value)
     case 'mood': {
-      const albums = (await allAlbums(c)).filter((a) => a.moods?.includes(v.value))
+      const albums = (await allAlbums(c)).filter((a) => hasMood(a, v.value))
       return (await mapLimit(albums, ALBUM_FETCH_LIMIT, (a) => c.getAlbum(a.id))).flatMap((a) => a.song)
     }
     case 'mix':

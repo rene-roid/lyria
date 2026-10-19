@@ -13,7 +13,7 @@ const store = new Map<string, string>()
   }
 }
 
-const { candidates } = await import('../src/renderer/main/tagArt')
+const { candidates, shownCover } = await import('../src/renderer/main/tagArt')
 const { shuffle } = await import('../src/renderer/main/mixes')
 
 /** 300 albums, all tagged "chill", named so that alphabetical order is also index order. */
@@ -39,4 +39,15 @@ test('a tag draws on all its music, not the alphabetical front of it', async () 
   // What the covers actually end up being: the tail of the library has to turn up across rolls.
   const picks = Array.from({ length: 40 }, (_, i) => shuffle(pool, `mood|mood|chill:${i}`)[0])
   expect(picks.some((id) => ALBUMS.slice(200).some((a) => a.coverArt === id))).toBe(true)
+})
+
+test('browse tiles share out covers, and each keeps the one it was given', () => {
+  // One soundtrack tagged with every mood: only the first tile leads with it.
+  expect(shownCover('genre|mood|energetic', ['ost', 'a'])).toBe('ost')
+  expect(shownCover('genre|mood|sad', ['ost', 'b'])).toBe('b')
+  // Asked again (a re-render, or the page the tile opens), the choice holds.
+  expect(shownCover('genre|mood|sad', ['ost', 'b'])).toBe('b')
+  // With every candidate taken, a tile still shows something rather than nothing.
+  expect(shownCover('genre|mood|dark', ['ost', 'b'])).toBe('ost')
+  expect(shownCover('genre|mood|empty', [])).toBeUndefined()
 })

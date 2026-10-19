@@ -10,6 +10,7 @@ import type { SubsonicClient } from '@shared/subsonic/client'
 import type { AlbumID3 } from '@shared/subsonic/types'
 import type { MixKind, Track, View } from '@shared/types'
 import { mapLimit } from '@shared/async'
+import { hasMood } from '@shared/format'
 
 /**
  * Where the whole album list comes from. Injected rather than imported, so this module stays a
@@ -123,7 +124,8 @@ export async function mixSeeds(client: SubsonicClient, count = 6): Promise<MixSe
   const albums = await client.getAlbumList2('frequent', 50)
   const byKind: [MixKind, string[]][] = [
     ['genre', tally(albums.map((a) => a.genre))],
-    ['mood', tally(albums.flatMap((a) => a.moods ?? []))],
+    // Lowercased so one mood tagged two ways counts as one seed.
+    ['mood', tally(albums.flatMap((a) => (a.moods ?? []).map((m) => m.toLowerCase())))],
     ['artist', tally(albums.map((a) => a.artist)).filter((n) => !NOT_AN_ARTIST.test(n.trim()))]
   ]
   const out: MixSeed[] = []
@@ -151,7 +153,7 @@ async function moodPool(
   seed: string,
   albums: AlbumSource
 ): Promise<Track[]> {
-  const tagged = (await albums(client)).filter((a) => a.moods?.includes(mood))
+  const tagged = (await albums(client)).filter((a) => hasMood(a, mood))
   return songsFrom(client, tagged, MOOD_ALBUMS, seed)
 }
 

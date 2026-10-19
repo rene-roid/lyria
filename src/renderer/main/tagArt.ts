@@ -79,6 +79,7 @@ onCacheClear(() => {
   generation++
   memo.clear()
   inflight.clear()
+  shown.clear()
   for (const fn of listeners) fn()
 })
 
@@ -159,6 +160,24 @@ function resolve(client: SubsonicClient, ref: ArtRef, key: string): void {
       inflight.delete(key)
     }
   })
+}
+
+/** The one cover each tag's browse tile shows, by `artKey`, kept for the session as navidroid does. */
+const shown = new Map<string, string>()
+
+/**
+ * The cover a tag's tile shows: the first of its picks that no other tile is showing yet, so a
+ * cover shared by many tags (one soundtrack tagged with ten moods) leads only one of them. Holds
+ * its choice once made, so the tile and the page it opens keep the same picture.
+ */
+export function shownCover(key: string, ids: string[]): string | undefined {
+  const held = shown.get(key)
+  if (held && ids.includes(held)) return held
+  if (!ids.length) return held
+  const taken = new Set(shown.values())
+  const id = ids.find((i) => !taken.has(i)) ?? ids[0]
+  shown.set(key, id)
+  return id
 }
 
 /**
