@@ -318,3 +318,19 @@ export function Chip({
     </button>
   )
 }
+
+/**
+ * A slider in the app's style, filled up to its value. The fill is the `--p` the `.range` class
+ * paints from, worked out here once so no slider can be left without it.
+ */
+export function Range({
+  className = '',
+  style,
+  ...props
+}: Omit<React.ComponentProps<'input'>, 'type' | 'value' | 'min' | 'max'> & { value: number; min: number; max: number }) {
+  const span = props.max - props.min
+  const p = span > 0 ? Math.min(100, Math.max(0, ((props.value - props.min) / span) * 100)) : 0
+  return (
+    <input type="range" {...props} className={`range ${className}`} style={{ ...style, '--p': `${p}%` } as React.CSSProperties} />
+  )
+}

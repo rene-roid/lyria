@@ -15,7 +15,7 @@ import type {
 import { OVERLAY_ANCHORS, OVERLAY_BACKGROUNDS } from '@shared/types'
 import type { ServerProbe } from '@shared/subsonic/client'
 import { useSessionStore, useSettings } from '@renderer/shared/sessionStore'
-import { GhostButton, PageTitle, SectionHeader, Spinner } from '../components/ui'
+import { GhostButton, PageTitle, Range, SectionHeader, Spinner } from '../components/ui'
 
 const field =
   'w-full rounded-md border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-ink outline-none transition focus:border-accent focus:bg-white/[0.08]'
@@ -246,9 +246,8 @@ function OpacitySlider({
         <div className="text-xs text-ink-2">{description}</div>
       </div>
       <div className="flex shrink-0 items-center gap-3">
-        <input
-          type="range"
-          className="range w-40"
+        <Range
+          className="w-40"
           min={min}
           max={100}
           step={5}
@@ -394,9 +393,8 @@ function ToastSettings({
           <div className="text-sm font-medium">Duration</div>
           <div className="text-xs text-ink-2">{(durationMs / 1000).toFixed(1)} seconds on screen</div>
         </div>
-        <input
-          type="range"
-          className="range w-40"
+        <Range
+          className="w-40"
           min={1500}
           max={8000}
           step={250}
@@ -475,9 +473,8 @@ function SongCache({ maxGb, onChange }: { maxGb: number; onChange: (v: number) =
             {used && ` \u00b7 ${(used.bytes / 1024 ** 3).toFixed(2)} GB used by ${used.count} songs`}
           </div>
         </div>
-        <input
-          type="range"
-          className="range w-40"
+        <Range
+          className="w-40"
           min={0}
           max={50}
           step={1}
@@ -517,9 +514,8 @@ function ImageCache({ maxMb, onChange }: { maxMb: number; onChange: (v: number) 
             {used && ` \u00b7 ${(used.bytes / 1024 ** 2).toFixed(0)} MB used by ${used.count} covers`}
           </div>
         </div>
-        <input
-          type="range"
-          className="range w-40"
+        <Range
+          className="w-40"
           min={0}
           max={2048}
           step={64}

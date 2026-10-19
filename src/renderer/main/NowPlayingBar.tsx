@@ -1,7 +1,7 @@
 import { Heart, ListMusic, MicVocal, PictureInPicture2, Repeat, Repeat1, Shuffle, Volume1, Volume2, VolumeX } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Track } from '@shared/types'
-import { formatTime } from '@shared/format'
+import { formatTime, wheelVolumeStep } from '@shared/format'
 import { Cover } from '@renderer/shared/Cover'
 import { TransportControls } from '@renderer/shared/Controls'
 import { player, usePlayerState } from '@renderer/shared/playerStore'
@@ -9,6 +9,7 @@ import { useClient, useSettings } from '@renderer/shared/sessionStore'
 import { nav, useNav } from './nav'
 import { useContextMenu } from './components/ContextMenu'
 import { TrackMenu } from './components/TrackList'
+import { Range } from './components/ui'
 import { ArtistLinks } from './components/ArtistLinks'
 
 export function NowPlayingBar() {
@@ -39,12 +40,12 @@ export function NowPlayingBar() {
 
   const handleVolumeWheel = (e: React.WheelEvent) => {
     e.preventDefault()
-    const next = Math.min(1, Math.max(0, (muted ? 0 : volume) - Math.sign(e.deltaY) * 0.05))
+    const step = wheelVolumeStep(e.deltaY, e.deltaMode)
+    if (!step) return
+    const next = Math.min(1, Math.max(0, (muted ? 0 : volume) + step))
     if (muted) player.setMuted(false)
     player.setVolume(next)
   }
-
-  const pct = (v: number): React.CSSProperties => ({ '--p': `${v * 100}%` }) as React.CSSProperties
 
   return (
     <footer
@@ -94,9 +95,7 @@ export function NowPlayingBar() {
         </div>
         <div className="flex w-full items-center gap-2 text-[11px] tabular-nums text-ink-2">
           <span className="w-10 text-right">{formatTime(shown)}</span>
-          <input
-            type="range"
-            className="range"
+          <Range
             min={0}
             max={Math.max(duration, 0.01)}
             step={0.1}
@@ -105,7 +104,6 @@ export function NowPlayingBar() {
             onChange={(e) => setScrub(Number(e.target.value))}
             onPointerUp={(e) => player.seek(Number((e.target as HTMLInputElement).value))}
             onKeyUp={(e) => player.seek(Number((e.target as HTMLInputElement).value))}
-            style={pct(duration ? shown / duration : 0)}
           />
           <span className="w-10">{formatTime(duration)}</span>
         </div>
@@ -129,15 +127,12 @@ export function NowPlayingBar() {
           <button className="icon-btn h-8 w-8 rounded-full" onClick={() => player.setMuted(!muted)} title={muted ? 'Unmute' : 'Mute'}>
             <VolumeIcon size={16} />
           </button>
-          <input
-            type="range"
-            className="range"
+          <Range
             min={0}
             max={1}
             step={0.01}
             value={muted ? 0 : volume}
             onChange={(e) => player.setVolume(Number(e.target.value))}
-            style={pct(muted ? 0 : volume)}
           />
         </div>
       </div>

@@ -48,7 +48,7 @@ function Avatar() {
     <button
       onClick={() => nav.go({ name: 'settings' })}
       title={`${username || 'Settings'} · ${status}`}
-      className={`relative flex h-8 w-8 items-center justify-center rounded-full bg-[#e1118c] text-sm font-extrabold transition hover:scale-105 ${
+      className={`no-drag relative flex h-8 w-8 items-center justify-center rounded-full bg-[#e1118c] text-sm font-extrabold transition hover:scale-105 ${
         active ? 'ring-2 ring-white' : ''
       }`}
     >
@@ -146,7 +146,8 @@ export function TitleBar() {
           )}
         </div>
       </div>
-      <div className="no-drag flex items-center justify-end">
+      {/* Only the button opts out of dragging, so the empty bar beside it still moves the window. */}
+      <div className="flex items-center justify-end">
         <Avatar />
       </div>
     </header>

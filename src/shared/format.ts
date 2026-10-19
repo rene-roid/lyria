@@ -112,3 +112,20 @@ export function splitCredits(line: string, credits: Credit[]): { text: string; i
   if (at < line.length) parts.push({ text: line.slice(at) })
   return parts.length ? parts : [{ text: line }]
 }
+
+/** Volume change per wheel notch, and the most one wheel event may move it. */
+const VOLUME_PER_NOTCH = 0.05
+/** Pixels in one notch, near enough on every platform: Windows reports 100, Wayland 120, X11 53. */
+const NOTCH_PX = 120
+
+/**
+ * How far a wheel event over the player moves the volume. Proportional to how far the wheel
+ * turned, not a fixed step per event: Windows sends one event per notch, but Linux splits a notch
+ * (and every touchpad swipe) into a burst of small ones, so a fixed step there raced to the ends.
+ */
+export function wheelVolumeStep(deltaY: number, deltaMode = 0): number {
+  // deltaMode: 0 pixels, 1 lines, 2 pages. Chromium sends pixels; the rest are scaled to match.
+  const px = deltaMode === 1 ? deltaY * 40 : deltaMode === 2 ? deltaY * 800 : deltaY
+  const step = (-px / NOTCH_PX) * VOLUME_PER_NOTCH
+  return Math.max(-VOLUME_PER_NOTCH, Math.min(VOLUME_PER_NOTCH, step))
+}
