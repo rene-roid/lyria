@@ -43,9 +43,11 @@ export function NowPlayingBar() {
     player.setVolume(next)
   }
 
+  const pct = (v: number): React.CSSProperties => ({ '--p': `${v * 100}%` }) as React.CSSProperties
+
   return (
     <footer
-      className="grid h-[88px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 border-t border-stroke bg-surface px-4"
+      className="grid h-[80px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 bg-surface px-4"
       onWheel={handleVolumeWheel}
     >
       <div className="flex min-w-0 items-center gap-3" onContextMenu={(e) => track && menu.open(e)}>
@@ -60,12 +62,13 @@ export function NowPlayingBar() {
                 {track.title}
               </button>
               <button
-                className="block max-w-full truncate text-xs text-ink-2 hover:underline"
+                className="block max-w-full truncate text-xs text-ink-2 hover:text-ink hover:underline"
                 onClick={() => track.artistId && nav.go({ name: 'artist', id: track.artistId })}
               >
                 {track.artist}
               </button>
             </div>
+            <FavoriteButton {...star} />
           </>
         )}
       </div>
@@ -80,23 +83,15 @@ export function NowPlayingBar() {
         />
       )}
 
-      <div className="flex w-[520px] flex-col items-center gap-1.5">
+      <div className="flex w-[min(600px,42vw)] flex-col items-center gap-1">
         <div className="flex items-center gap-2">
-          <button
-            className={`icon-btn h-8 w-8 ${shuffle ? 'text-accent hover:text-accent' : ''}`}
-            onClick={() => player.setShuffle(!shuffle)}
-            title="Shuffle"
-          >
+          <Toggle on={shuffle} onClick={() => player.setShuffle(!shuffle)} title="Shuffle">
             <Shuffle size={16} />
-          </button>
+          </Toggle>
           <TransportControls size={18} />
-          <button
-            className={`icon-btn h-8 w-8 ${repeat !== 'off' ? 'text-accent hover:text-accent' : ''}`}
-            onClick={() => player.cycleRepeat(repeat)}
-            title={`Repeat: ${repeat}`}
-          >
+          <Toggle on={repeat !== 'off'} onClick={() => player.cycleRepeat(repeat)} title={`Repeat: ${repeat}`}>
             {repeat === 'one' ? <Repeat1 size={16} /> : <Repeat size={16} />}
-          </button>
+          </Toggle>
         </div>
         <div className="flex w-full items-center gap-2 text-[11px] tabular-nums text-ink-2">
           <span className="w-10 text-right">{formatTime(shown)}</span>
@@ -111,40 +106,28 @@ export function NowPlayingBar() {
             onChange={(e) => setScrub(Number(e.target.value))}
             onPointerUp={(e) => player.seek(Number((e.target as HTMLInputElement).value))}
             onKeyUp={(e) => player.seek(Number((e.target as HTMLInputElement).value))}
-            style={{
-              background: `linear-gradient(to right, #fff ${duration ? (shown / duration) * 100 : 0}%, rgba(255,255,255,0.2) 0)`
-            }}
+            style={pct(duration ? shown / duration : 0)}
           />
           <span className="w-10">{formatTime(duration)}</span>
         </div>
       </div>
 
       <div className="flex items-center justify-end gap-1">
-        <FavoriteButton {...star} />
-        <button
-          className={`icon-btn h-8 w-8 ${showLyrics ? 'text-accent hover:text-accent' : ''}`}
-          onClick={nav.toggleLyrics}
-          title="Lyrics"
-          disabled={!track}
-        >
+        <Toggle on={showLyrics} onClick={nav.toggleLyrics} title="Lyrics" disabled={!track}>
           <MicVocal size={16} />
-        </button>
-        <button
-          className={`icon-btn h-8 w-8 ${showQueue ? 'text-accent hover:text-accent' : ''}`}
-          onClick={nav.toggleQueue}
-          title="Queue"
-        >
+        </Toggle>
+        <Toggle on={showQueue} onClick={nav.toggleQueue} title="Queue">
           <ListMusic size={16} />
-        </button>
-        <button
-          className={`icon-btn h-8 w-8 ${settings.widgets.mini ? 'text-accent hover:text-accent' : ''}`}
+        </Toggle>
+        <Toggle
+          on={settings.widgets.mini}
           onClick={() => void window.sonora.settings.update({ widgets: { ...settings.widgets, mini: !settings.widgets.mini } })}
           title="Mini player"
         >
           <PictureInPicture2 size={16} />
-        </button>
-        <div className="ml-2 flex w-[150px] items-center gap-2">
-          <button className="icon-btn h-8 w-8" onClick={() => player.setMuted(!muted)} title={muted ? 'Unmute' : 'Mute'}>
+        </Toggle>
+        <div className="ml-1 flex w-[140px] items-center gap-1">
+          <button className="icon-btn h-8 w-8 rounded-full" onClick={() => player.setMuted(!muted)} title={muted ? 'Unmute' : 'Mute'}>
             <VolumeIcon size={16} />
           </button>
           <input
@@ -155,13 +138,41 @@ export function NowPlayingBar() {
             step={0.01}
             value={muted ? 0 : volume}
             onChange={(e) => player.setVolume(Number(e.target.value))}
-            style={{
-              background: `linear-gradient(to right, #fff ${(muted ? 0 : volume) * 100}%, rgba(255,255,255,0.2) 0)`
-            }}
+            style={pct(muted ? 0 : volume)}
           />
         </div>
       </div>
     </footer>
+  )
+}
+
+/** An on/off control of the bar: green with a dot under it while on, as Spotify marks shuffle. */
+function Toggle({
+  on,
+  onClick,
+  title,
+  disabled,
+  children
+}: {
+  on: boolean
+  onClick: () => void
+  title: string
+  disabled?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      className={`icon-btn relative h-8 w-8 rounded-full ${
+        on
+          ? 'text-accent after:absolute after:bottom-0.5 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-accent hover:text-accent-2'
+          : ''
+      }`}
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+    >
+      {children}
+    </button>
   )
 }
 
@@ -199,9 +210,9 @@ function FavoriteButton({
 }) {
   return (
     <button
-      className={`icon-btn h-8 w-8 ${starred ? 'text-accent hover:text-accent' : ''}`}
+      className={`icon-btn h-8 w-8 shrink-0 rounded-full ${starred ? 'text-accent hover:text-accent' : ''}`}
       disabled={disabled}
-      title={starred ? 'Remove from favorites' : 'Add to favorites'}
+      title={starred ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
       onClick={() => void toggle()}
     >
       <Heart size={16} fill={starred ? 'currentColor' : 'none'} />

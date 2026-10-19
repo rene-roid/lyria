@@ -227,7 +227,7 @@ const TrackRow = memo(function TrackRow({
       <div className="hidden items-center justify-end gap-1 md:flex">
         <button
           className={`icon-btn h-7 w-7 ${fav ? 'text-accent hover:text-accent' : 'opacity-0 group-hover:opacity-100'}`}
-          title={fav ? 'Remove from favorites' : 'Add to favorites'}
+          title={fav ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
           disabled={!canStar}
           onClick={() => onToggleStar(t)}
         >
@@ -331,7 +331,7 @@ export function TrackMenu({
             onClick={run(onToggleStar)}
             disabled={!client}
           >
-            {starred ? 'Remove from favorites' : 'Add to favorites'}
+            {starred ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
           </MenuItem>
           {(track.albumId || track.artistId) && <MenuSeparator />}
           {track.albumId && (

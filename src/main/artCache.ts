@@ -116,7 +116,12 @@ export function registerArtProtocol(): void {
     try {
       const body = await readFile(file)
       return new Response(new Uint8Array(body.buffer, body.byteOffset, body.byteLength), {
-        headers: { 'content-type': contentType(body), 'cache-control': 'max-age=86400' }
+        // Allowed anywhere, so a page can read a cover's pixels back for its header colour.
+        headers: {
+          'content-type': contentType(body),
+          'cache-control': 'max-age=86400',
+          'access-control-allow-origin': '*'
+        }
       })
     } catch {
       return new Response(null, { status: 404 })

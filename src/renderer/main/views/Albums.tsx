@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { AlbumID3, AlbumListType } from '@shared/subsonic/types'
 import { useClient } from '@renderer/shared/sessionStore'
 import { AlbumCard, CardGrid } from '../components/AlbumCard'
-import { ErrorBox, GhostButton, Loading, PageTitle } from '../components/ui'
+import { Chip, ErrorBox, GhostButton, Loading, PageTitle } from '../components/ui'
 import { RETRY_MS } from '../useAsync'
 import { cacheRead, cacheWrite } from '@renderer/shared/cache'
 
@@ -10,6 +10,7 @@ const SORTS: { key: AlbumListType; label: string }[] = [
   { key: 'alphabeticalByName', label: 'A-Z' },
   { key: 'alphabeticalByArtist', label: 'Artist' },
   { key: 'newest', label: 'Recently added' },
+  { key: 'recent', label: 'Recently played' },
   { key: 'frequent', label: 'Most played' },
   { key: 'random', label: 'Random' }
 ]
@@ -19,10 +20,10 @@ const PAGE = 60
 /** Only the first page is cached; the rest is cheap to re-page once the user scrolls again. */
 const firstPage = (sort: AlbumListType): AlbumID3[] => cacheRead<AlbumID3[]>(`albums:${sort}`) ?? []
 
-export function Albums() {
+export function Albums({ initialSort = 'alphabeticalByName' }: { initialSort?: AlbumListType }) {
   const client = useClient()
-  const [sort, setSort] = useState<AlbumListType>('alphabeticalByName')
-  const [albums, setAlbums] = useState<AlbumID3[]>(() => firstPage('alphabeticalByName'))
+  const [sort, setSort] = useState<AlbumListType>(initialSort)
+  const [albums, setAlbums] = useState<AlbumID3[]>(() => firstPage(initialSort))
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
   // Remembers which page failed, since a cached first page makes albums.length a bad guess for the retry offset.
@@ -64,9 +65,9 @@ export function Albums() {
       <PageTitle title="Albums" />
       <div className="mb-5 flex flex-wrap gap-2">
         {SORTS.map((s) => (
-          <GhostButton key={s.key} active={sort === s.key} onClick={() => setSort(s.key)}>
+          <Chip key={s.key} active={sort === s.key} onClick={() => setSort(s.key)}>
             {s.label}
-          </GhostButton>
+          </Chip>
         ))}
       </div>
       {error && <ErrorBox message={error.message} onRetry={() => load(error.offset, error.reset)} />}

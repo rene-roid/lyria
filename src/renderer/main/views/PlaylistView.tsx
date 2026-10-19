@@ -1,16 +1,17 @@
-import { Play, Shuffle } from 'lucide-react'
+import { Shuffle } from 'lucide-react'
 import { formatDuration } from '@shared/format'
 import { useClient } from '@renderer/shared/sessionStore'
 import { player } from '@renderer/shared/playerStore'
-import { Cover } from '@renderer/shared/Cover'
+import { Cover, useCoverColor } from '@renderer/shared/Cover'
 import { TrackList } from '../components/TrackList'
-import { ErrorBox, GhostButton, Loading, PageTitle, PrimaryButton } from '../components/ui'
+import { ActionIcon, ErrorBox, Loading, PageTitle, PlayCircle } from '../components/ui'
 import { recentOf, playFrom } from '../recents'
 import { useAsync } from '../useAsync'
 
 export function PlaylistView({ id }: { id: string }) {
   const client = useClient()
   const state = useAsync(`playlist:${id}`, () => client?.getPlaylist(id), [client, id])
+  const color = useCoverColor(state.data?.coverArt ?? state.data?.entry[0]?.coverArt)
 
   if (state.loading) return <Loading />
   if (state.error) return <ErrorBox message={state.error} onRetry={state.reload} />
@@ -25,28 +26,28 @@ export function PlaylistView({ id }: { id: string }) {
       <PageTitle
         eyebrow="Playlist"
         title={pl.name}
-        cover={<Cover id={pl.coverArt ?? songs[0]?.coverArt} size={500} className="h-52 w-52 shadow-2xl" />}
+        color={color}
+        cover={<Cover id={pl.coverArt ?? songs[0]?.coverArt} size={500} className="h-52 w-52" />}
         subtitle={
           <span>
-            {pl.owner ? `${pl.owner} · ` : ''}
+            {pl.comment && <span className="mb-2 block">{pl.comment}</span>}
+            {pl.owner && <span className="font-bold text-ink">{pl.owner} • </span>}
             {songs.length} song{songs.length === 1 ? '' : 's'}, {formatDuration(total)}
-            {pl.comment ? ` · ${pl.comment}` : ''}
           </span>
         }
         actions={
           <>
-            <PrimaryButton onClick={() => playFrom(songs, 0, origin)} disabled={!songs.length}>
-              <Play size={16} fill="currentColor" /> Play
-            </PrimaryButton>
-            <GhostButton
+            <PlayCircle onClick={() => playFrom(songs, 0, origin)} disabled={!songs.length} />
+            <ActionIcon
+              title="Shuffle"
               disabled={!songs.length}
               onClick={() => {
                 player.setShuffle(true)
                 playFrom(songs, Math.floor(Math.random() * songs.length), origin)
               }}
             >
-              <Shuffle size={16} /> Shuffle
-            </GhostButton>
+              <Shuffle size={28} />
+            </ActionIcon>
           </>
         }
       />

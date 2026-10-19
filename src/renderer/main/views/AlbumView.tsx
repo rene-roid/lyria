@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react'
-import { ListPlus, Play, Shuffle } from 'lucide-react'
+import { ListPlus, Shuffle } from 'lucide-react'
 import type { AlbumID3 } from '@shared/subsonic/types'
 import type { SubsonicClient } from '@shared/subsonic/client'
 import type { Track } from '@shared/types'
 import { filterTracks, formatDuration, parseDiscName } from '@shared/format'
 import { useClient } from '@renderer/shared/sessionStore'
 import { player } from '@renderer/shared/playerStore'
-import { Cover } from '@renderer/shared/Cover'
+import { Cover, useCoverColor } from '@renderer/shared/Cover'
 import { TrackList } from '../components/TrackList'
-import { Empty, ErrorBox, GhostButton, Loading, PageTitle, PrimaryButton, SearchInput } from '../components/ui'
+import { ActionIcon, Empty, ErrorBox, Loading, PageTitle, PlayCircle, SearchInput } from '../components/ui'
 import { useAsync } from '../useAsync'
 import { nav } from '../nav'
 import { albumRecent, playFrom } from '../recents'
@@ -35,6 +35,7 @@ export function AlbumView({ id, discIds }: { id: string; discIds?: string[] }) {
   const state = useAsync(`album:${key}`, () => (client ? loadAlbum(client, ids) : undefined), [client, key])
   const [query, setQuery] = useState('')
   const shown = useMemo(() => filterTracks(state.data?.song ?? [], query), [state.data, query])
+  const color = useCoverColor(state.data?.coverArt ?? state.data?.id)
 
   if (state.loading) return <Loading />
   if (state.error) return <ErrorBox message={state.error} onRetry={state.reload} />
@@ -49,7 +50,8 @@ export function AlbumView({ id, discIds }: { id: string; discIds?: string[] }) {
       <PageTitle
         eyebrow="Album"
         title={album.name}
-        cover={<Cover id={album.coverArt ?? album.id} size={500} className="h-52 w-52 shadow-2xl" />}
+        color={color}
+        cover={<Cover id={album.coverArt ?? album.id} size={500} className="h-52 w-52" />}
         subtitle={
           <span>
             {album.artistId ? (
@@ -59,26 +61,26 @@ export function AlbumView({ id, discIds }: { id: string; discIds?: string[] }) {
             ) : (
               <span className="font-semibold text-ink">{album.artist}</span>
             )}
-            {album.year ? ` · ${album.year}` : ''} · {songs.length} song{songs.length === 1 ? '' : 's'}, {formatDuration(total)}
-            {album.genre ? ` · ${album.genre}` : ''}
+            {album.year ? ` • ${album.year}` : ''} • {songs.length} song{songs.length === 1 ? '' : 's'}, {formatDuration(total)}
+            {album.genre ? ` • ${album.genre}` : ''}
           </span>
         }
         actions={
           <>
-            <PrimaryButton onClick={() => playFrom(songs, 0, origin)}>
-              <Play size={16} fill="currentColor" /> Play
-            </PrimaryButton>
-            <GhostButton
+            <PlayCircle onClick={() => playFrom(songs, 0, origin)} />
+            <ActionIcon
+              title="Shuffle"
+              
               onClick={() => {
                 player.setShuffle(true)
                 playFrom(songs, Math.floor(Math.random() * songs.length), origin)
               }}
             >
-              <Shuffle size={16} /> Shuffle
-            </GhostButton>
-            <GhostButton onClick={() => player.addToQueue(songs)} title="Add to queue">
-              <ListPlus size={16} /> Queue
-            </GhostButton>
+              <Shuffle size={28} />
+            </ActionIcon>
+            <ActionIcon onClick={() => player.addToQueue(songs)} title="Add to queue">
+              <ListPlus size={28} />
+            </ActionIcon>
           </>
         }
       />

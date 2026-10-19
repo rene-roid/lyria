@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Play } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Heart, Loader2, Play } from 'lucide-react'
 import type { AlbumID3, ArtistID3 } from '@shared/subsonic/types'
 import type { SubsonicClient } from '@shared/subsonic/client'
 import type { RecentItem, Track } from '@shared/types'
@@ -8,61 +8,118 @@ import { Cover } from '@renderer/shared/Cover'
 import { useClient } from '@renderer/shared/sessionStore'
 import { nav, type View } from '../nav'
 import { albumRecent, playFrom } from '../recents'
-import { Spinner } from './ui'
+import { SectionHeader, Spinner } from './ui'
+
+/**
+ * A shelf card, as on the web UI's Home: square artwork with a green play button that rises in on
+ * hover, the title and a two-line subtitle under it. `onPlay` may take a while (a mix is built on
+ * the spot), so the button spins until it settles.
+ */
+export function Card({
+  art,
+  title,
+  subtitle,
+  onOpen,
+  onPlay,
+  round = false
+}: {
+  art: React.ReactNode
+  title: string
+  subtitle: string
+  onOpen: () => void
+  onPlay?: () => Promise<void> | void
+  round?: boolean
+}) {
+  const [busy, setBusy] = useState(false)
+  const play = (e: React.MouseEvent): void => {
+    e.stopPropagation()
+    if (busy || !onPlay) return
+    setBusy(true)
+    void Promise.resolve(onPlay()).finally(() => setBusy(false))
+  }
+  return (
+    <div className="group min-w-0 cursor-pointer rounded-md p-3 transition hover:bg-white/[0.07]" onClick={onOpen}>
+      <div className="relative">
+        <div
+          className={`aspect-square w-full overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.5)] ${round ? 'rounded-full' : 'rounded-md'}`}
+        >
+          {art}
+        </div>
+        {onPlay && (
+          <button
+            onClick={play}
+            title={`Play ${title}`}
+            className={`absolute right-2 bottom-2 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-black shadow-[0_8px_8px_rgba(0,0,0,0.3)] transition hover:scale-105 hover:bg-accent-2 focus-visible:translate-y-0 focus-visible:opacity-100 ${
+              busy ? '' : 'translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100'
+            }`}
+          >
+            {busy ? <Loader2 size={22} className="animate-spin" /> : <Play size={22} fill="currentColor" className="ml-0.5" />}
+          </button>
+        )}
+      </div>
+      <div className="mt-2 truncate text-[15px] font-bold">{title}</div>
+      <div className="mt-1 line-clamp-2 text-sm text-ink-2">{subtitle}</div>
+    </div>
+  )
+}
 
 /** `discIds` are sibling albums holding the rest of a split multi-disc release, in disc order. */
 export function AlbumCard({ album, discIds }: { album: AlbumID3; discIds?: string[] }) {
   const client = useClient()
   const ids = [album.id, ...(discIds ?? [])]
-  const playAlbum = async (e: React.MouseEvent): Promise<void> => {
-    e.stopPropagation()
+  const playAlbum = async (): Promise<void> => {
     if (!client) return
     const albums = await Promise.all(ids.map((i) => client.getAlbum(i)))
     playFrom(albums.flatMap((a) => a.song), 0, albumRecent(album, discIds))
   }
   return (
-    <div
-      className="group cursor-pointer rounded-lg bg-white/[0.02] p-3 transition hover:bg-white/[0.07]"
-      onClick={() => nav.go({ name: 'album', id: album.id, discIds })}
-    >
-      <div className="relative">
-        <Cover id={album.coverArt ?? album.id} size={300} className="aspect-square w-full shadow-lg" />
-        <button
-          onClick={playAlbum}
-          className="absolute right-2 bottom-2 flex h-11 w-11 translate-y-2 items-center justify-center rounded-full bg-accent text-black opacity-0 shadow-xl transition group-hover:translate-y-0 group-hover:opacity-100 hover:scale-105"
-          title="Play album"
-        >
-          <Play size={20} fill="currentColor" className="ml-0.5" />
-        </button>
-      </div>
-      <div className="mt-3 truncate text-sm font-semibold">
-        {ids.length > 1 ? parseDiscName(album.name).base : album.name}
-      </div>
-      <div className="mt-0.5 truncate text-xs text-ink-2">
-        {album.year ? `${album.year} · ` : ''}
-        {album.artist ?? 'Unknown artist'}
-      </div>
-    </div>
+    <Card
+      art={<Cover id={album.coverArt ?? album.id} size={300} className="h-full w-full" rounded="" />}
+      title={ids.length > 1 ? parseDiscName(album.name).base : album.name}
+      subtitle={`${album.year ? `${album.year} • ` : ''}${album.artist ?? 'Unknown artist'}`}
+      onOpen={() => nav.go({ name: 'album', id: album.id, discIds })}
+      onPlay={playAlbum}
+    />
   )
 }
 
 export function ArtistCard({ artist }: { artist: ArtistID3 }) {
   return (
-    <div
-      className="group cursor-pointer rounded-lg bg-white/[0.02] p-3 text-center transition hover:bg-white/[0.07]"
-      onClick={() => nav.go({ name: 'artist', id: artist.id })}
-    >
-      <Cover id={artist.coverArt ?? artist.id} size={300} className="aspect-square w-full shadow-lg" rounded="rounded-full" />
-      <div className="mt-3 truncate text-sm font-semibold">{artist.name}</div>
-      <div className="mt-0.5 truncate text-xs text-ink-2">
-        {artist.albumCount ? `${artist.albumCount} album${artist.albumCount === 1 ? '' : 's'}` : 'Artist'}
-      </div>
-    </div>
+    <Card
+      round
+      art={<Cover id={artist.coverArt ?? artist.id} size={300} className="h-full w-full" rounded="" />}
+      title={artist.name}
+      subtitle={artist.albumCount ? `${artist.albumCount} album${artist.albumCount === 1 ? '' : 's'}` : 'Artist'}
+      onOpen={() => nav.go({ name: 'artist', id: artist.id })}
+    />
   )
 }
 
 export function CardGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3">{children}</div>
+  return <div className="-mx-3 grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))]">{children}</div>
+}
+
+const CARD_MIN = 170
+
+/** One row of cards, as many as fit the width, with "Show all" leading to the rest. */
+export function Shelf({ title, onMore, items }: { title: string; onMore?: () => void; items: React.ReactNode[] }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [fit, setFit] = useState(5)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(([e]) => setFit(Math.max(1, Math.floor(e.contentRect.width / CARD_MIN))))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return (
+    <section className="mb-6">
+      <SectionHeader title={title} onMore={onMore} />
+      <div ref={ref} className="-mx-3 grid" style={{ gridTemplateColumns: `repeat(${fit}, minmax(0, 1fr))` }}>
+        {items.slice(0, fit)}
+      </div>
+    </section>
+  )
 }
 
 /** Tags (genres, moods) have no artwork on Navidrome, so give each a stable colour from its name. */
@@ -106,8 +163,22 @@ export function gradient(name: string): string {
   return `linear-gradient(135deg, hsl(${hue(name)} 60% 32%), hsl(${(hue(name) + 40) % 360} 55% 18%))`
 }
 
+/** The header band of a tag's page, in the hue its artwork is washed with. */
+export function tagColor(name: string): string {
+  return `hsl(${hue(name)} 50% 28%)`
+}
+
+/** Liked Songs' artwork, the gradient and heart Spotify gave it. */
+export function LikedCover({ className }: { className: string }) {
+  return (
+    <div className={`flex shrink-0 items-center justify-center bg-gradient-to-br from-[#450af5] to-[#c4efd9] ${className}`}>
+      <Heart className="h-[38%] w-[38%]" fill="currentColor" />
+    </div>
+  )
+}
+
 export function TileGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-2">{children}</div>
+  return <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">{children}</div>
 }
 
 /** Wide short tile with a hover play button: the "jump back in" shelf at the top of Home. */

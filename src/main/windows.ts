@@ -177,10 +177,10 @@ export function createMainWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 600,
     title: 'Sonora',
-    backgroundColor: '#0f0f0f',
+    backgroundColor: '#000000',
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#0f0f0f', symbolColor: '#e5e5e5', height: 36 }
+    titleBarOverlay: { color: '#000000', symbolColor: '#e5e5e5', height: 48 }
   })
   register('main', win)
   forwardConsole('main', win)

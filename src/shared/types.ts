@@ -3,6 +3,8 @@
  * Every visible window is a pure subscriber of PlayerEvents and only ever sends PlayerCommands.
  */
 
+import type { AlbumListType } from './subsonic/types'
+
 export interface Track {
   id: string
   title: string
@@ -141,7 +143,8 @@ export type MixKind = 'genre' | 'mood' | 'artist'
 /** Every navigable page of the main window. Lives here because `recents` persists it. */
 export type View =
   | { name: 'home' }
-  | { name: 'albums' }
+  /** `sort` is where "Show all" on a Home shelf lands; the page itself starts at A-Z. */
+  | { name: 'albums'; sort?: AlbumListType }
   | { name: 'soundtracks' }
   | { name: 'artists' }
   | { name: 'genres' }

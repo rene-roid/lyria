@@ -1,14 +1,15 @@
-import { Play, Shuffle } from 'lucide-react'
+import { Shuffle } from 'lucide-react'
 import { useClient } from '@renderer/shared/sessionStore'
-import { Cover } from '@renderer/shared/Cover'
+import { Cover, useCoverColor } from '@renderer/shared/Cover'
 import { AlbumCard, CardGrid } from '../components/AlbumCard'
-import { ErrorBox, GhostButton, Loading, PageTitle, PrimaryButton } from '../components/ui'
+import { ActionIcon, ErrorBox, Loading, PageTitle, PlayCircle, SectionHeader } from '../components/ui'
 import { recentOf, playFrom } from '../recents'
 import { useAsync } from '../useAsync'
 
 export function ArtistView({ id }: { id: string }) {
   const client = useClient()
   const state = useAsync(`artist:${id}`, () => client?.getArtist(id), [client, id])
+  const color = useCoverColor(state.data?.coverArt ?? state.data?.id)
 
   const playAll = async (shuffle: boolean): Promise<void> => {
     if (!client || !state.data) return
@@ -32,19 +33,19 @@ export function ArtistView({ id }: { id: string }) {
       <PageTitle
         eyebrow="Artist"
         title={artist.name}
+        color={color}
         subtitle={`${albums.length} album${albums.length === 1 ? '' : 's'}`}
-        cover={<Cover id={artist.coverArt ?? artist.id} size={400} className="h-44 w-44 shadow-2xl" rounded="rounded-full" />}
+        cover={<Cover id={artist.coverArt ?? artist.id} size={400} className="h-52 w-52" rounded="rounded-full" />}
         actions={
           <>
-            <PrimaryButton onClick={() => playAll(false)}>
-              <Play size={16} fill="currentColor" /> Play
-            </PrimaryButton>
-            <GhostButton onClick={() => playAll(true)}>
-              <Shuffle size={16} /> Shuffle
-            </GhostButton>
+            <PlayCircle onClick={() => playAll(false)} />
+            <ActionIcon title="Shuffle" onClick={() => playAll(true)}>
+              <Shuffle size={28} />
+            </ActionIcon>
           </>
         }
       />
+      <SectionHeader title="Discography" />
       <CardGrid>{albums.map((a) => <AlbumCard key={a.id} album={{ ...a, artist: a.artist ?? artist.name }} />)}</CardGrid>
     </div>
   )

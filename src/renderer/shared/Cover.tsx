@@ -1,6 +1,7 @@
 import { Music2 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { localArtUrl } from '@shared/art'
+import { headerColor } from '@shared/color'
 import { useClient, useSettings } from './sessionStore'
 
 /**
@@ -18,6 +19,38 @@ export function useCoverUrls(id: string | undefined, size = 300): string[] {
 
 export function useCoverUrl(id: string | undefined, size = 300): string | undefined {
   return useCoverUrls(id, size)[0]
+}
+
+const colors = new Map<string, string>()
+
+/**
+ * The colour a page paints behind a cover: picked from the cover's own pixels, as navidroid and
+ * the server's web UI tint their headers. `fallback` shows until it is known, and stays for a
+ * cover that never loads.
+ */
+export function useCoverColor(id: string | undefined, fallback = '#535353'): string {
+  const url = useCoverUrl(id, 64)
+  const [color, setColor] = useState(() => (id && colors.get(id)) || fallback)
+  useEffect(() => {
+    const known = id && colors.get(id)
+    if (known || !id || !url) return setColor(known || fallback)
+    let live = true
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
+      if (!ctx) return
+      ctx.drawImage(img, 0, 0, 24, 24)
+      const [r, g, b] = headerColor(ctx.getImageData(0, 0, 24, 24).data)
+      colors.set(id, `rgb(${r} ${g} ${b})`)
+      if (live) setColor(colors.get(id)!)
+    }
+    img.src = url
+    return () => {
+      live = false
+    }
+  }, [id, url, fallback])
+  return color
 }
 
 export function Cover({

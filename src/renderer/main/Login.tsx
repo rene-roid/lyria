@@ -28,7 +28,7 @@ export function Login() {
 
   return (
     <div className="flex h-full flex-col bg-surface">
-      <div className="drag h-9 shrink-0" />
+      <div className="drag h-12 shrink-0" />
       <div className="flex flex-1 items-center justify-center">
         <form onSubmit={submit} className="w-[380px] rounded-xl border border-stroke bg-surface-2 p-8 shadow-2xl">
           <div className="mb-6">
@@ -57,7 +57,7 @@ export function Login() {
           <button
             type="submit"
             disabled={busy || !server || !username || !password}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-accent py-2 text-sm font-semibold text-black transition hover:brightness-110 disabled:opacity-40"
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-accent py-2.5 text-sm font-bold text-black transition hover:scale-[1.02] hover:bg-accent-2 disabled:opacity-40"
           >
             {busy ? <Spinner className="h-4 w-4 border-black/20 border-t-black" /> : 'Sign in'}
           </button>

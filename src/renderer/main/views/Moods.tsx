@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react'
-import { Play, Shuffle } from 'lucide-react'
+import { Shuffle } from 'lucide-react'
 import type { AlbumID3 } from '@shared/subsonic/types'
 import { capitalize } from '@shared/format'
 import { mapLimit } from '@shared/async'
 import { useClient } from '@renderer/shared/sessionStore'
 import { player } from '@renderer/shared/playerStore'
-import { AlbumCard, CardGrid, TagCard } from '../components/AlbumCard'
+import { AlbumCard, CardGrid, TagCard, tagColor } from '../components/AlbumCard'
 import { TagArt, TagArtCover } from '../components/TagArt'
-import { Empty, ErrorBox, GhostButton, Loading, PageTitle, PrimaryButton, SearchInput } from '../components/ui'
+import { ActionIcon, Empty, ErrorBox, Loading, PageTitle, PlayCircle, SearchInput } from '../components/ui'
 import { nav } from '../nav'
 import { recentOf, playFrom } from '../recents'
 import { ALBUM_FETCH_LIMIT } from '../mixes'
@@ -91,16 +91,15 @@ export function MoodView({ value }: { value: string }) {
       <PageTitle
         eyebrow="Mood"
         title={capitalize(value)}
+        color={tagColor(capitalize(value))}
         cover={<TagArtCover art={{ style: 'mood', seed: { kind: 'mood', value } }} name={capitalize(value)} />}
         subtitle={`${albums.length} album${albums.length === 1 ? '' : 's'}`}
         actions={
           <>
-            <PrimaryButton onClick={() => playAll(false)} disabled={!albums.length}>
-              <Play size={16} fill="currentColor" /> Play
-            </PrimaryButton>
-            <GhostButton onClick={() => playAll(true)} disabled={!albums.length}>
-              <Shuffle size={16} /> Shuffle
-            </GhostButton>
+            <PlayCircle onClick={() => playAll(false)} disabled={!albums.length} />
+            <ActionIcon title="Shuffle" onClick={() => playAll(true)} disabled={!albums.length}>
+              <Shuffle size={28} />
+            </ActionIcon>
           </>
         }
       />

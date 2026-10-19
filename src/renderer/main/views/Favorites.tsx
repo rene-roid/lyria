@@ -1,59 +1,70 @@
-import { Play, Shuffle } from 'lucide-react'
-import { useClient } from '@renderer/shared/sessionStore'
+import { Shuffle } from 'lucide-react'
+import { formatDuration } from '@shared/format'
+import { useClient, useSessionStore } from '@renderer/shared/sessionStore'
 import { player } from '@renderer/shared/playerStore'
-import { AlbumCard, ArtistCard, CardGrid } from '../components/AlbumCard'
+import { AlbumCard, ArtistCard, CardGrid, LikedCover } from '../components/AlbumCard'
 import { TrackList } from '../components/TrackList'
-import { Empty, ErrorBox, GhostButton, Loading, PageTitle, PrimaryButton, SectionHeader } from '../components/ui'
+import { ActionIcon, Empty, ErrorBox, Loading, PageTitle, PlayCircle, SectionHeader } from '../components/ui'
 import { playFrom } from '../recents'
 import { useAsync } from '../useAsync'
 
+/** Liked Songs, with the albums and artists starred on the server under it. */
 export function Favorites() {
   const client = useClient()
+  const username = useSessionStore((s) => s.session?.username)
   const state = useAsync('starred', () => client?.getStarred2(), [client])
   if (state.loading) return <Loading />
   if (state.error) return <ErrorBox message={state.error} onRetry={state.reload} />
   const r = state.data
   if (!r) return null
-  const nothing = !r.songs.length && !r.albums.length && !r.artists.length
+  const songs = r.songs
+  const total = songs.reduce((s, t) => s + t.duration, 0)
   return (
     <div>
       <PageTitle
-        title="Favorites"
-        subtitle="Songs, albums and artists you starred in Navidrome"
+        eyebrow="Playlist"
+        title="Liked Songs"
+        color="#5038a0"
+        cover={<LikedCover className="h-52 w-52 rounded-md" />}
+        subtitle={
+          <span>
+            {username && <span className="font-bold text-ink">{username} • </span>}
+            {songs.length} song{songs.length === 1 ? '' : 's'}
+            {songs.length > 0 && `, ${formatDuration(total)}`}
+          </span>
+        }
         actions={
-          r.songs.length ? (
-            <>
-              <PrimaryButton onClick={() => playFrom(r.songs, 0, null)}>
-                <Play size={16} fill="currentColor" /> Play
-              </PrimaryButton>
-              <GhostButton
-                onClick={() => {
-                  player.setShuffle(true)
-                  playFrom(r.songs, Math.floor(Math.random() * r.songs.length), null)
-                }}
-              >
-                <Shuffle size={16} /> Shuffle
-              </GhostButton>
-            </>
-          ) : undefined
+          <>
+            <PlayCircle onClick={() => playFrom(songs, 0, null)} disabled={!songs.length} />
+            <ActionIcon
+              title="Shuffle"
+              disabled={!songs.length}
+              onClick={() => {
+                player.setShuffle(true)
+                playFrom(songs, Math.floor(Math.random() * songs.length), null)
+              }}
+            >
+              <Shuffle size={28} />
+            </ActionIcon>
+          </>
         }
       />
-      {nothing && <Empty>Nothing starred yet</Empty>}
-      {r.songs.length > 0 && (
+      {songs.length > 0 ? (
         <section className="mb-8">
-          <SectionHeader title="Songs" />
-          <TrackList tracks={r.songs} origin={null} />
+          <TrackList tracks={songs} origin={null} />
         </section>
+      ) : (
+        <Empty>Songs you like will appear here. Hit the heart on any song to save it.</Empty>
       )}
       {r.albums.length > 0 && (
         <section className="mb-8">
-          <SectionHeader title="Albums" />
+          <SectionHeader title="Liked albums" />
           <CardGrid>{r.albums.map((a) => <AlbumCard key={a.id} album={a} />)}</CardGrid>
         </section>
       )}
       {r.artists.length > 0 && (
         <section className="mb-8">
-          <SectionHeader title="Artists" />
+          <SectionHeader title="Liked artists" />
           <CardGrid>{r.artists.map((a) => <ArtistCard key={a.id} artist={a} />)}</CardGrid>
         </section>
       )}

@@ -19,19 +19,19 @@ export function QueuePanel() {
   }, [index])
 
   return (
-    <aside className="flex w-[320px] shrink-0 flex-col border-l border-stroke bg-surface">
-      <div className="flex h-12 items-center justify-between border-b border-stroke px-4">
-        <div className="text-sm font-semibold">
-          Queue <span className="ml-1 text-xs font-normal text-ink-3">{queue.length}</span>
+    <aside className="flex w-[320px] shrink-0 flex-col overflow-hidden rounded-lg bg-surface-2">
+      <div className="flex h-14 items-center justify-between px-4">
+        <div className="text-base font-bold">
+          Queue <span className="ml-1 text-xs font-normal text-ink-2">{queue.length}</span>
         </div>
         <div className="flex items-center gap-1">
-          <button className="icon-btn h-7 w-7" title="Save queue as playlist" onClick={() => playlists.newPlaylist(queue)} disabled={!queue.length}>
+          <button className="icon-btn h-8 w-8 rounded-full" title="Save queue as playlist" onClick={() => playlists.newPlaylist(queue)} disabled={!queue.length}>
             <ListPlus size={15} />
           </button>
-          <button className="icon-btn h-7 w-7" title="Clear queue" onClick={player.clearQueue} disabled={!queue.length}>
+          <button className="icon-btn h-8 w-8 rounded-full" title="Clear queue" onClick={player.clearQueue} disabled={!queue.length}>
             <Trash2 size={14} />
           </button>
-          <button className="icon-btn h-7 w-7" title="Close" onClick={nav.toggleQueue}>
+          <button className="icon-btn h-8 w-8 rounded-full" title="Close" onClick={nav.toggleQueue}>
             <X size={15} />
           </button>
         </div>

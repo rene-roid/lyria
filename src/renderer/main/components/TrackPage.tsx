@@ -1,12 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Play, Shuffle } from 'lucide-react'
+import { Shuffle } from 'lucide-react'
 import type { RecentItem, Track } from '@shared/types'
 import { filterTracks, formatDuration } from '@shared/format'
 import { player } from '@renderer/shared/playerStore'
 import { playFrom } from '../recents'
 import type { AsyncState } from '../useAsync'
 import { TrackList } from './TrackList'
-import { Empty, ErrorBox, GhostButton, Loading, PageTitle, PrimaryButton, SearchInput } from './ui'
+import { ActionIcon, Empty, ErrorBox, Loading, PageTitle, PlayCircle, SearchInput } from './ui'
+import { tagColor } from './AlbumCard'
 
 /** A flat, searchable, playable list of songs: the shape shared by genre and mix pages. */
 export function TrackPage({
@@ -41,22 +42,22 @@ export function TrackPage({
       <PageTitle
         eyebrow={eyebrow}
         title={title}
+        color={tagColor(title)}
         cover={cover}
         subtitle={`${songs.length} song${songs.length === 1 ? '' : 's'}, ${formatDuration(total)}`}
         actions={
           <>
-            <PrimaryButton onClick={() => playFrom(songs, 0, origin)} disabled={!songs.length}>
-              <Play size={16} fill="currentColor" /> Play
-            </PrimaryButton>
-            <GhostButton
+            <PlayCircle onClick={() => playFrom(songs, 0, origin)} disabled={!songs.length} />
+            <ActionIcon
+              title="Shuffle"
               disabled={!songs.length}
               onClick={() => {
                 player.setShuffle(true)
                 playFrom(songs, Math.floor(Math.random() * songs.length), origin)
               }}
             >
-              <Shuffle size={16} /> Shuffle
-            </GhostButton>
+              <Shuffle size={28} />
+            </ActionIcon>
             {actions}
           </>
         }

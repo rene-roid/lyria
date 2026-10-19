@@ -1,17 +1,26 @@
 @import 'tailwindcss';
 
+/* The face navidroid ships, so the desktop and phone clients read the same. */
+@font-face {
+  font-family: 'Figtree';
+  src: url('./fonts/Figtree.ttf') format('truetype');
+  font-weight: 300 900;
+  font-display: block;
+}
+
+/* The server's "Spotify" theme, as navidroid's Theme.kt has it. */
 @theme {
-  --font-sans: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
-  --color-surface: #0f0f0f;
-  --color-surface-2: #181818;
-  --color-surface-3: #212121;
+  --font-sans: 'Figtree', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --color-surface: #000000;
+  --color-surface-2: #121212;
+  --color-surface-3: #282828;
   --color-surface-4: #2a2a2a;
-  --color-ink: #f3f3f3;
+  --color-ink: #ffffff;
   --color-ink-2: #b3b3b3;
-  --color-ink-3: #8a8a8a;
-  --color-accent: #4cc2ff;
-  --color-accent-2: #0078d4;
-  --color-stroke: rgba(255, 255, 255, 0.08);
+  --color-ink-3: #7a7a7a;
+  --color-accent: #1db954;
+  --color-accent-2: #1ed760;
+  --color-stroke: rgba(255, 255, 255, 0.1);
 }
 
 @layer base {
@@ -112,25 +121,33 @@
   -webkit-app-region: no-drag;
 }
 
-.icon-btn {
-  @apply inline-flex items-center justify-center rounded-md text-ink-2 transition-colors hover:bg-white/10 hover:text-ink active:bg-white/15 disabled:opacity-40 disabled:hover:bg-transparent;
-}
+/* Layered, so a utility on the same element (rounded-full, text-accent, w-40) wins over these. */
+@layer components {
+  .icon-btn {
+    @apply inline-flex items-center justify-center rounded-md text-ink-2 transition-colors hover:bg-white/10 hover:text-ink active:bg-white/15 disabled:opacity-40 disabled:hover:bg-transparent;
+  }
 
-.range {
-  @apply h-1 w-full cursor-pointer appearance-none rounded-full bg-white/20;
-}
-.range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  height: 12px;
-  width: 12px;
-  border-radius: 999px;
-  background: #fff;
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-.range:hover::-webkit-slider-thumb,
-.range:active::-webkit-slider-thumb {
-  opacity: 1;
+  /* Filled up to --p (a percentage); white, turning green under the pointer as Spotify's does. */
+  .range {
+    @apply h-1 w-full cursor-pointer appearance-none rounded-full;
+    background: linear-gradient(to right, var(--range-fill, #fff) var(--p, 0%), rgba(255, 255, 255, 0.3) 0);
+  }
+  .range:hover {
+    --range-fill: var(--color-accent);
+  }
+  .range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 12px;
+    width: 12px;
+    border-radius: 999px;
+    background: #fff;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .range:hover::-webkit-slider-thumb,
+  .range:active::-webkit-slider-thumb {
+    opacity: 1;
+  }
 }
 
 .text-shadow {

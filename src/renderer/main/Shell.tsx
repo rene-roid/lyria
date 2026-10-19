@@ -27,7 +27,7 @@ function Content() {
     case 'home':
       return <Home />
     case 'albums':
-      return <Albums />
+      return <Albums initialSort={view.sort} />
     case 'soundtracks':
       return <Soundtracks />
     case 'artists':
@@ -86,10 +86,11 @@ export function Shell() {
   return (
     <div className="flex h-full flex-col bg-surface">
       <TitleBar />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 gap-2 px-2">
         <Sidebar />
-        <main className="relative min-w-0 flex-1 overflow-hidden bg-gradient-to-b from-surface-2 to-surface">
-          <div key={JSON.stringify(view)} className="h-full overflow-y-auto p-6 pb-10">
+        <main className="relative min-w-0 flex-1 overflow-hidden rounded-lg bg-surface-2">
+          {/* isolate: page headers paint their colour band behind the content with a negative z-index. */}
+          <div key={JSON.stringify(view)} className="relative isolate h-full overflow-y-auto p-6 pb-10">
             <Content />
           </div>
           {showLyrics && <LyricsView />}

@@ -2,7 +2,7 @@ import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { Lyrics } from '@shared/types'
 import { activeLineIndex, fromStructuredLyrics, parseLyricsText } from '@shared/lyrics'
-import { Cover } from '@renderer/shared/Cover'
+import { Cover, useCoverColor } from '@renderer/shared/Cover'
 import { player, usePlayerState, usePlayerStore } from '@renderer/shared/playerStore'
 import { useClient } from '@renderer/shared/sessionStore'
 import { Spinner } from '../components/ui'
@@ -21,6 +21,7 @@ export function LyricsView() {
   const [active, setActive] = useState(-1)
   const listRef = useRef<HTMLDivElement>(null)
   const clock = useRef({ position: 0, at: performance.now(), playing: false })
+  const color = useCoverColor(track?.coverArt, '#1f1f1f')
 
   useEffect(() => {
     setLyrics(null)
@@ -79,13 +80,20 @@ export function LyricsView() {
   }, [active])
 
   return (
-    <div className="absolute inset-0 z-10 flex flex-col bg-gradient-to-b from-[#1b2a3a] to-surface">
+    <div
+      className="absolute inset-0 z-10 flex flex-col"
+      style={{
+        backgroundColor: color,
+        backgroundImage: 'linear-gradient(transparent, rgba(0,0,0,0.4))',
+        transition: 'background-color 500ms'
+      }}
+    >
       <div className="flex items-center justify-between px-6 pt-4">
         <div className="flex items-center gap-3">
           <Cover id={track?.coverArt} size={120} className="h-12 w-12" />
           <div>
             <div className="text-sm font-semibold">{track?.title}</div>
-            <div className="text-xs text-ink-2">{track?.artist}</div>
+            <div className="text-xs text-white/70">{track?.artist}</div>
           </div>
         </div>
         <button className="icon-btn h-8 w-8" onClick={nav.toggleLyrics} title="Close lyrics">
@@ -98,7 +106,7 @@ export function LyricsView() {
             <Spinner />
           </div>
         )}
-        {!loading && !lyrics && <div className="text-center text-ink-3">No lyrics available for this track</div>}
+        {!loading && !lyrics && <div className="text-center text-white/60">No lyrics available for this track</div>}
         {lyrics?.lines.map((line, i) => {
           const isActive = i === active
           const passed = lyrics.synced && i < active
@@ -107,9 +115,9 @@ export function LyricsView() {
               key={i}
               data-line={i}
               onClick={() => lyrics.synced && player.seek(line.time - (lyrics.offset ?? 0) / 1000)}
-              className={`my-1 rounded-md px-3 py-1.5 text-[26px] leading-snug font-bold transition-all duration-300 ${
-                lyrics.synced ? 'cursor-pointer hover:bg-white/[0.06]' : ''
-              } ${isActive ? 'scale-100 text-ink' : passed ? 'text-ink-3/70' : lyrics.synced ? 'text-ink-3' : 'text-ink-2'}`}
+              className={`my-1 rounded-md px-3 py-1.5 text-[28px] leading-snug font-bold transition-all duration-300 ${
+                lyrics.synced ? 'cursor-pointer hover:bg-white/10' : ''
+              } ${isActive ? 'scale-100 text-white' : passed ? 'text-white/65' : lyrics.synced ? 'text-white/40' : 'text-white/85'}`}
               style={{ transformOrigin: 'left center', transform: isActive ? 'scale(1.02)' : 'scale(1)' }}
             >
               {line.text || '♪'}
@@ -117,7 +125,7 @@ export function LyricsView() {
           )
         })}
         {lyrics && !lyrics.synced && (
-          <div className="mt-8 text-center text-xs text-ink-3">Unsynced lyrics: this track has no timestamps.</div>
+          <div className="mt-8 text-center text-xs text-white/60">Unsynced lyrics: this track has no timestamps.</div>
         )}
       </div>
     </div>
