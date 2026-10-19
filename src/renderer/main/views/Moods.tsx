@@ -7,7 +7,7 @@ import { useClient } from '@renderer/shared/sessionStore'
 import { player } from '@renderer/shared/playerStore'
 import { AlbumCard, CardGrid, TagCard, tagColor } from '../components/AlbumCard'
 import { TagArt, TagArtCover } from '../components/TagArt'
-import { ActionIcon, Empty, ErrorBox, Loading, PageTitle, PlayCircle, SearchInput } from '../components/ui'
+import { ActionIcon, Empty, ErrorBox, Loading, PageTitle, SearchInput } from '../components/ui'
 import { nav } from '../nav'
 import { recentOf, playFrom } from '../recents'
 import { ALBUM_FETCH_LIMIT } from '../mixes'
@@ -94,16 +94,16 @@ export function MoodView({ value }: { value: string }) {
         color={tagColor(capitalize(value))}
         cover={<TagArtCover art={{ style: 'mood', seed: { kind: 'mood', value } }} name={capitalize(value)} />}
         subtitle={`${albums.length} album${albums.length === 1 ? '' : 's'}`}
+        search={{ value: query, onChange: setQuery, placeholder: 'Search in this mood' }}
+        play={{ onClick: () => playAll(false), disabled: !albums.length, from: moodRecent(value).key }}
         actions={
           <>
-            <PlayCircle onClick={() => playAll(false)} disabled={!albums.length} />
             <ActionIcon title="Shuffle" onClick={() => playAll(true)} disabled={!albums.length}>
               <Shuffle size={28} />
             </ActionIcon>
           </>
         }
       />
-      <SearchInput value={query} onChange={setQuery} placeholder="Search in this mood" />
       {shown.length === 0 ? (
         <Empty>No albums match</Empty>
       ) : (

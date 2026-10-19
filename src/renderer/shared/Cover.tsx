@@ -1,5 +1,5 @@
 import { Music2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { localArtUrl } from '@shared/art'
 import { headerColor } from '@shared/color'
 import { useClient, useSettings } from './sessionStore'
@@ -53,6 +53,10 @@ export function useCoverColor(id: string | undefined, fallback = '#535353'): str
   return color
 }
 
+/** How long a cover none of whose sources loaded waits before trying them again, and how many times. */
+const RETRY_MS = 15_000
+const RETRIES = 4
+
 export function Cover({
   id,
   size = 300,
@@ -65,14 +69,20 @@ export function Cover({
   rounded?: string
 }) {
   const urls = useCoverUrls(id, size)
-  const [tried, setTried] = useState(0)
-  // A widget keeps one Cover for every track it ever shows, so the sources have to be given back
-  // when the id changes -- otherwise one cover that failed leaves the slot empty for the session.
-  const shown = useRef(id)
-  if (shown.current !== id) {
-    shown.current = id
-    setTried(0)
-  }
+  const sources = urls.join(' ')
+  const [attempt, setAttempt] = useState({ sources, tried: 0, round: 0 })
+  // The now-playing bar, the widget, the mini player and the toast each keep one Cover for every
+  // track they ever show, so its sources are given back whenever they change: a new track, or a
+  // failover to another server address. Otherwise one bad moment blanks the slot for the track.
+  if (attempt.sources !== sources) setAttempt({ sources, tried: 0, round: 0 })
+  const { tried, round } = attempt.sources === sources ? attempt : { tried: 0, round: 0 }
+  // Every source failed: most likely the server could not be reached just then, so try again in a
+  // while. Main never keeps a failed download, so the cached copy gets another go each round.
+  useEffect(() => {
+    if (!urls.length || tried < urls.length || round >= RETRIES) return
+    const t = setTimeout(() => setAttempt((a) => ({ ...a, tried: 0, round: a.round + 1 })), RETRY_MS)
+    return () => clearTimeout(t)
+  }, [tried, round, urls.length])
   const url = urls[tried]
   return (
     <div className={`relative shrink-0 overflow-hidden bg-surface-3 ${rounded} ${className}`}>
@@ -81,13 +91,13 @@ export function Cover({
         // one it decodes: lazy keeps that to what has been scrolled to, async keeps the decode off
         // the main thread so a long list still scrolls while its covers arrive.
         <img
-          key={url}
+          key={`${url}#${round}`}
           src={url}
           alt=""
           draggable={false}
           loading="lazy"
           decoding="async"
-          onError={() => setTried((n) => n + 1)}
+          onError={() => setAttempt((a) => ({ ...a, tried: a.tried + 1 }))}
           className="h-full w-full object-cover"
         />
       ) : (

@@ -8,7 +8,7 @@ import { useClient } from '@renderer/shared/sessionStore'
 import { player } from '@renderer/shared/playerStore'
 import { Cover, useCoverColor } from '@renderer/shared/Cover'
 import { TrackList } from '../components/TrackList'
-import { ActionIcon, Empty, ErrorBox, Loading, PageTitle, PlayCircle, SearchInput } from '../components/ui'
+import { ActionIcon, Empty, ErrorBox, Loading, PageTitle } from '../components/ui'
 import { useAsync } from '../useAsync'
 import { nav } from '../nav'
 import { albumRecent, playFrom } from '../recents'
@@ -65,9 +65,10 @@ export function AlbumView({ id, discIds }: { id: string; discIds?: string[] }) {
             {album.genre ? ` • ${album.genre}` : ''}
           </span>
         }
+        search={{ value: query, onChange: setQuery, placeholder: 'Search in this album' }}
+        play={{ onClick: () => playFrom(songs, 0, origin), from: origin.key }}
         actions={
           <>
-            <PlayCircle onClick={() => playFrom(songs, 0, origin)} />
             <ActionIcon
               title="Shuffle"
               
@@ -84,7 +85,6 @@ export function AlbumView({ id, discIds }: { id: string; discIds?: string[] }) {
           </>
         }
       />
-      <SearchInput value={query} onChange={setQuery} placeholder="Search in this album" />
       {shown.length === 0 ? (
         <Empty>No songs match</Empty>
       ) : (

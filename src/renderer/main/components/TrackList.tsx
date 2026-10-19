@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import type { RecentItem, Track } from '@shared/types'
 import { formatTime } from '@shared/format'
+import { parseMix } from '@shared/navimix'
 import { Cover } from '@renderer/shared/Cover'
 import { player, usePlayerState } from '@renderer/shared/playerStore'
 import { useClient } from '@renderer/shared/sessionStore'
@@ -23,6 +24,7 @@ import { playFrom } from '../recents'
 import { playlists, usePlaylistsRevision } from '../playlists'
 import { useAsync } from '../useAsync'
 import { ContextMenu, MenuItem, MenuLabel, MenuSeparator, useContextMenu } from './ContextMenu'
+import { ArtistLinks, creditsOf } from './ArtistLinks'
 
 export function TrackList({
   tracks,
@@ -32,7 +34,8 @@ export function TrackList({
   discs = false,
   onRemove,
   removeLabel = 'Remove',
-  origin
+  origin,
+  from
 }: {
   tracks: Track[]
   showAlbum?: boolean
@@ -45,6 +48,8 @@ export function TrackList({
   removeLabel?: string
   /** The page these rows belong to, for Home's shelf. Omitted, a row counts as a song on its own. */
   origin?: RecentItem | null
+  /** The page's key for its play buttons, where it differs from `origin`'s (see playFrom). */
+  from?: string
 }) {
   const currentId = usePlayerState((s) => s.track?.id)
   const playing = usePlayerState((s) => s.playing)
@@ -74,7 +79,7 @@ export function TrackList({
   )
 
   // Handed to every row, so they have to hold still while the list re-renders around them.
-  const onPlay = useCallback((index: number) => playFrom(tracks, index, origin), [tracks, origin])
+  const onPlay = useCallback((index: number) => playFrom(tracks, index, origin, from), [tracks, origin, from])
   const onMenu = useCallback(
     (e: React.MouseEvent, index: number) => {
       setMenuIndex(index)
@@ -134,7 +139,7 @@ export function TrackList({
           track={tracks[menuIndex]}
           starred={isStarred(tracks[menuIndex])}
           onClose={menu.close}
-          onPlay={() => playFrom(tracks, menuIndex, origin)}
+          onPlay={() => playFrom(tracks, menuIndex, origin, from)}
           onToggleStar={() => void toggleStar(tracks[menuIndex])}
           onRemove={onRemove && (() => onRemove(menuIndex))}
           removeLabel={removeLabel}
@@ -199,15 +204,11 @@ const TrackRow = memo(function TrackRow({
       <div className="flex min-w-0 items-center gap-3">
         {showCover && <Cover id={t.coverArt} size={80} className="h-10 w-10" />}
         <div className="min-w-0">
-          <div className={`truncate font-medium ${isCurrent ? 'text-accent' : 'text-ink'}`}>{t.title}</div>
-          <div className="truncate text-xs text-ink-2">
-            {t.artistId ? (
-              <button className="hover:underline" onClick={() => nav.go({ name: 'artist', id: t.artistId! })}>
-                {t.artist}
-              </button>
-            ) : (
-              t.artist
-            )}
+          <div className={`truncate font-medium ${isCurrent ? 'text-accent' : 'text-ink'}`} title={t.title}>
+            {t.title}
+          </div>
+          <div className="truncate text-xs text-ink-2" title={t.artist}>
+            <ArtistLinks track={t} />
           </div>
         </div>
       </div>
@@ -274,10 +275,16 @@ export function TrackMenu({
   removeLabel?: string
 }) {
   const client = useClient()
-  const [picking, setPicking] = useState(false)
+  // Which list the menu has turned into, if any: playlists to add to, or the song's artists.
+  const [pick, setPick] = useState<'playlist' | 'artist' | null>(null)
+  const picking = pick === 'playlist'
+  const credits = creditsOf(track)
   // Already warm from the sidebar's copy of the same key, so the picker opens without a wait.
   const revision = usePlaylistsRevision()
   const picked = useAsync('playlists', () => (picking ? client?.getPlaylists() : undefined), [client, picking, revision])
+
+  // A NaviBeat or Explo mix is rewritten by its plugin, so a song added to one would not stay.
+  const ownLists = picked.data?.filter((p) => !parseMix(p.name, p.comment))
 
   const run = (fn: () => void) => () => {
     fn()
@@ -291,9 +298,21 @@ export function TrackMenu({
 
   return (
     <ContextMenu pos={pos} onClose={onClose}>
-      {picking ? (
+      {pick === 'artist' ? (
         <>
-          <MenuItem icon={<ArrowLeft size={14} />} onClick={() => setPicking(false)}>
+          <MenuItem icon={<ArrowLeft size={14} />} onClick={() => setPick(null)}>
+            Go to artist
+          </MenuItem>
+          <MenuSeparator />
+          {credits.map((c) => (
+            <MenuItem key={c.id} icon={<Mic2 size={14} />} onClick={run(() => nav.go({ name: 'artist', id: c.id }))}>
+              {c.name}
+            </MenuItem>
+          ))}
+        </>
+      ) : picking ? (
+        <>
+          <MenuItem icon={<ArrowLeft size={14} />} onClick={() => setPick(null)}>
             Add to playlist
           </MenuItem>
           <MenuSeparator />
@@ -303,8 +322,8 @@ export function TrackMenu({
           <MenuSeparator />
           {picked.loading && <MenuLabel>Loading…</MenuLabel>}
           {picked.error && <MenuLabel>{picked.error}</MenuLabel>}
-          {picked.data?.length === 0 && <MenuLabel>No playlists</MenuLabel>}
-          {picked.data?.map((p) => (
+          {ownLists?.length === 0 && <MenuLabel>No playlists</MenuLabel>}
+          {ownLists?.map((p) => (
             <MenuItem key={p.id} icon={<ListMusic size={14} />} onClick={() => addTo(p.id)}>
               {p.name}
             </MenuItem>
@@ -323,7 +342,7 @@ export function TrackMenu({
             Add to queue
           </MenuItem>
           <MenuSeparator />
-          <MenuItem icon={<Plus size={14} />} onClick={() => setPicking(true)} disabled={!client} hint="›">
+          <MenuItem icon={<Plus size={14} />} onClick={() => setPick('playlist')} disabled={!client} hint="›">
             Add to playlist
           </MenuItem>
           <MenuItem
@@ -333,14 +352,19 @@ export function TrackMenu({
           >
             {starred ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
           </MenuItem>
-          {(track.albumId || track.artistId) && <MenuSeparator />}
+          {(track.albumId || credits.length > 0) && <MenuSeparator />}
           {track.albumId && (
             <MenuItem icon={<Disc3 size={14} />} onClick={run(() => nav.go({ name: 'album', id: track.albumId! }))}>
               Go to album
             </MenuItem>
           )}
-          {track.artistId && (
-            <MenuItem icon={<Mic2 size={14} />} onClick={run(() => nav.go({ name: 'artist', id: track.artistId! }))}>
+          {credits.length === 1 && (
+            <MenuItem icon={<Mic2 size={14} />} onClick={run(() => nav.go({ name: 'artist', id: credits[0].id }))}>
+              Go to artist
+            </MenuItem>
+          )}
+          {credits.length > 1 && (
+            <MenuItem icon={<Mic2 size={14} />} onClick={() => setPick('artist')} hint="›">
               Go to artist
             </MenuItem>
           )}

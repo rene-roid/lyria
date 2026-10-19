@@ -69,6 +69,7 @@ export function childToTrack(c: Child): Track {
     title: c.title,
     artist: c.artist ?? 'Unknown artist',
     artistId: c.artistId,
+    artists: c.artists?.length ? c.artists.map(({ id, name }) => ({ id, name })) : undefined,
     album: c.album ?? '',
     albumId: c.albumId,
     duration: c.duration ?? 0,
@@ -270,6 +271,30 @@ export class SubsonicClient {
       albums: r.searchResult3.album ?? [],
       songs: (r.searchResult3.song ?? []).map(childToTrack)
     }
+  }
+
+  /**
+   * Every song crediting an artist, wherever it sits. Subsonic only lists the albums an artist is
+   * the album artist of, so a guest spot on a compilation or a lone single is found by searching
+   * the name and keeping the songs credited to this id, as the lead or as a featured artist.
+   */
+  async getArtistSongs(id: string, name: string): Promise<Track[]> {
+    // ponytail: capped at 4 pages of 500 hits for the name; page further if a name ever matches more.
+    const PAGE = 500
+    const credited: Child[] = []
+    for (let page = 0; page < 4; page++) {
+      const r = await this.call<Search3Response>('search3', {
+        query: name,
+        artistCount: 0,
+        albumCount: 0,
+        songCount: PAGE,
+        songOffset: page * PAGE
+      })
+      const songs = r.searchResult3.song ?? []
+      credited.push(...songs.filter((c) => c.artistId === id || c.artists?.some((a) => a.id === id)))
+      if (songs.length < PAGE) break
+    }
+    return credited.map(childToTrack)
   }
 
   // ---- playlists -----------------------------------------------------------

@@ -10,6 +10,8 @@ export interface Track {
   title: string
   artist: string
   artistId?: string
+  /** Every artist credited on the song, featured ones included, when the server says (OpenSubsonic). */
+  artists?: { id: string; name: string }[]
   album: string
   albumId?: string
   duration: number
@@ -376,6 +378,8 @@ export interface Settings {
   artCacheMaxMb: number
   /** Mixes the user kept, newest first. */
   savedMixes: SavedMix[]
+  /** Playlists hearted into Your Library, newest first. Kept here, not on the server, as navidroid does. */
+  savedPlaylists: string[]
   /** Also match soundtrack wording in the album title, not just the genre tag. */
   soundtrackTitleMatch: boolean
 }
@@ -400,6 +404,7 @@ export const defaultSettings: Settings = {
   cacheMaxGb: 5,
   artCacheMaxMb: 256,
   savedMixes: [],
+  savedPlaylists: [],
   soundtrackTitleMatch: true
 }
 

@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mock } from 'bun:test'
 
-mock.module('electron', () => ({ app: { isPackaged: true, setLoginItemSettings: () => {} } }))
+// Bun shares one 'electron' mock across test files and can only re-point the names it was first
+// given, so every test's mock lists the same ones (artCache.test needs net and protocol).
+mock.module('electron', () => ({ app: { isPackaged: true, setLoginItemSettings: () => {} }, net: {}, protocol: {} }))
 const { setAutoLaunch } = await import('../src/main/autolaunch')
 
 test('linux autostart entry is written then removed', () => {

@@ -130,7 +130,9 @@ export function TitleBar() {
             onKeyDown={(e) => {
               if (e.key === 'Escape') setQuery('')
             }}
+            id="search"
             placeholder="What do you want to play?"
+            spellCheck={false}
             className="h-10 w-full rounded-full border border-transparent bg-[#1f1f1f] pr-9 pl-11 text-[15px] text-ink outline-none transition placeholder:text-ink-2 hover:border-white/10 hover:bg-[#2a2a2a] focus:border-white"
           />
           {query && (

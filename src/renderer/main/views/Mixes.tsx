@@ -1,8 +1,9 @@
 import { BookmarkCheck, BookmarkPlus, Trash2 } from 'lucide-react'
 import type { MixKind, SavedMix } from '@shared/types'
+import { MIX_SECTIONS, paletteColor } from '@shared/navimix'
 import { capitalize } from '@shared/format'
 import { useClient } from '@renderer/shared/sessionStore'
-import { Card, CardGrid, Shelf } from '../components/AlbumCard'
+import { Card, CardGrid, PlaylistCard, Shelf } from '../components/AlbumCard'
 import { TagArt, TagArtCover } from '../components/TagArt'
 import { TrackPage } from '../components/TrackPage'
 import { Empty, GhostButton, PageTitle, SectionHeader } from '../components/ui'
@@ -12,6 +13,7 @@ import { nav } from '../nav'
 import { playFrom, recentOf } from '../recents'
 import { findSavedMix, savedMixId, savedMixRecent, savedMixes, useSavedMixes } from '../savedMixes'
 import { useAsync } from '../useAsync'
+import { useServerPlaylists } from '../playlists'
 
 /** Tag text arrives lowercased from most taggers; an artist's name is already cased how they want it. */
 const mixTitle = (s: MixSeed): string => `${s.kind === 'artist' ? s.value : capitalize(s.value)} Mix`
@@ -29,6 +31,7 @@ function MixCard({ seed }: { seed: MixSeed }) {
       title={title}
       subtitle={mixLabel(seed)}
       onOpen={() => nav.go({ name: 'mix', kind: seed.kind, value: seed.value })}
+      from={mixRecent(seed).key}
       onPlay={async () => {
         const tracks = client ? await buildMix(client, seed, allAlbums) : []
         if (tracks.length) playFrom(tracks, 0, mixRecent(seed))
@@ -37,6 +40,9 @@ function MixCard({ seed }: { seed: MixSeed }) {
   )
 }
 
+/** Sonora's own mixes are built here, on this machine, and never written to the server as playlists. */
+const LOCAL_TITLE = 'Mixed by Sonora'
+
 /** The day's mixes: one shelf on Home, the full grid on the Mixes page. Nothing until there is play history to seed from. */
 export function MixRow({ shelf = false }: { shelf?: boolean }) {
   const client = useClient()
@@ -44,10 +50,10 @@ export function MixRow({ shelf = false }: { shelf?: boolean }) {
   const state = useAsync('mixes:2', () => (client ? mixSeeds(client) : undefined), [client])
   if (!state.data?.length) return null
   const cards = state.data.map((seed) => <MixCard key={`${seed.kind}:${seed.value}`} seed={seed} />)
-  if (shelf) return <Shelf title="Made for you" onMore={() => nav.go({ name: 'mixes' })} items={cards} />
+  if (shelf) return <Shelf title={LOCAL_TITLE} onMore={() => nav.go({ name: 'mixes' })} items={cards} />
   return (
     <section className="mb-8">
-      <SectionHeader title="Made for you" />
+      <SectionHeader title={LOCAL_TITLE} />
       <CardGrid>{cards}</CardGrid>
     </section>
   )
@@ -60,7 +66,7 @@ function SavedMixRow({ mixes }: { mixes: SavedMix[] }) {
       <SectionHeader title="My saved mixes" />
       {mixes.length === 0 ? (
         <Empty>
-          Nothing saved yet. Open a mix below and hit <span className="text-ink-2">Save mix</span> to keep its lineup
+          Nothing saved yet. Open one of the mixes Sonora built and hit <span className="text-ink-2">Save mix</span> to keep its lineup
           before tomorrow rolls a new one.
         </Empty>
       ) : (
@@ -68,10 +74,11 @@ function SavedMixRow({ mixes }: { mixes: SavedMix[] }) {
           {mixes.map((mix) => (
             <Card
               key={mix.id}
-              art={<TagArt art={{ style: 'mix', seed: mix.seed }} name={mix.title} />}
+              art={<TagArt art={{ style: 'mix', seed: mix.seed }} name={mix.title} fallback={mix.tracks[0]?.coverArt} />}
               title={mix.title}
               subtitle={`Saved ${savedOn(mix.savedAt)}`}
               onOpen={() => nav.go({ name: 'savedMix', id: mix.id })}
+              from={savedMixRecent(mix).key}
               onPlay={() => playFrom(mix.tracks, 0, savedMixRecent(mix))}
             />
           ))}
@@ -83,11 +90,26 @@ function SavedMixRow({ mixes }: { mixes: SavedMix[] }) {
 
 export function MixesView() {
   const saved = useSavedMixes()
+  const { mixes } = useServerPlaylists()
   return (
     <div>
-      <PageTitle title="Mixes" subtitle="Daily lineups built from what you actually play, and the ones you kept." />
-      <SavedMixRow mixes={saved} />
+      <PageTitle
+        title="Mixes"
+        subtitle="Your server's NaviBeat and Explo mixes, the ones Sonora builds from what you play, and the ones you kept."
+      />
+      {MIX_SECTIONS.map(({ key, title }) => {
+        const items = mixes.filter((m) => m.mix.section === key)
+        return (
+          items.length > 0 && (
+            <section key={key} className="mb-8">
+              <SectionHeader title={title} />
+              <CardGrid>{items.map((p) => <PlaylistCard key={p.id} playlist={p} />)}</CardGrid>
+            </section>
+          )
+        )
+      })}
       <MixRow />
+      <SavedMixRow mixes={saved} />
     </div>
   )
 }
@@ -108,6 +130,7 @@ export function MixView({ value, kind = 'genre' }: { value: string; kind?: MixKi
       title={title}
       state={state}
       origin={mixRecent(seed)}
+      color={paletteColor(seed.value)}
       cover={<TagArtCover art={{ style: 'mix', seed }} name={title} />}
       actions={
         <GhostButton
@@ -133,7 +156,8 @@ export function SavedMixView({ id }: { id: string }) {
       title={mix.title}
       state={{ data: mix.tracks, error: undefined, loading: false, reload: () => {} }}
       origin={savedMixRecent(mix)}
-      cover={<TagArtCover art={{ style: 'mix', seed: mix.seed }} name={mix.title} />}
+      color={paletteColor(mix.seed.value)}
+      cover={<TagArtCover art={{ style: 'mix', seed: mix.seed }} name={mix.title} fallback={mix.tracks[0]?.coverArt} />}
       actions={
         <GhostButton
           title="Remove this mix from My saved mixes"

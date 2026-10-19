@@ -6,7 +6,9 @@ import { join } from 'node:path'
 const userData = mkdtempSync(join(tmpdir(), 'sonora-cache-'))
 let maxGb = 1 / 1024 // a 1 MB budget
 
-mock.module('electron', () => ({ app: { getPath: () => userData } }))
+// Bun shares one 'electron' mock across test files and can only re-point the names it was first
+// given, so every test's mock lists the same ones (artCache.test needs net and protocol).
+mock.module('electron', () => ({ app: { getPath: () => userData }, net: {}, protocol: {} }))
 mock.module('../src/main/store', () => ({ getSettings: () => ({ cacheMaxGb: maxGb }) }))
 mock.module('../src/main/credentials', () => ({ loadSession: () => ({ username: 'u' }) }))
 const { bytes, evict, stats } = await import('../src/main/audioCache')

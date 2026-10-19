@@ -122,3 +122,39 @@ describe('createPlaylist', () => {
     expect(client.createPlaylist('Road trip')).rejects.toThrow('Road trip')
   })
 })
+
+describe('getArtistSongs', () => {
+  /** A search that matches the name on `total` songs; every third is someone else who shares a word of it. */
+  function searchFetch(total: number, seen: number[] = []): (url: string) => Promise<Response> {
+    return async (url) => {
+      const p = new URL(url).searchParams
+      const offset = Number(p.get('songOffset'))
+      seen.push(offset)
+      const song = Array.from({ length: Math.max(0, Math.min(Number(p.get('songCount')), total - offset)) }, (_, k) => {
+        const i = offset + k
+        if (i % 3 === 0) return { id: `s${i}`, title: `Other ${i}`, artist: 'Mark Lane', artistId: 'other' }
+        // The rest credit the artist: half as the lead, half only as a featured artist.
+        return i % 2
+          ? { id: `s${i}`, title: `Lead ${i}`, artist: 'Mark Mathers', artistId: 'mm' }
+          : { id: `s${i}`, title: `Feat ${i}`, artist: 'DJ X feat. Mark Mathers', artistId: 'dj', artists: [{ id: 'dj', name: 'DJ X' }, { id: 'mm', name: 'Mark Mathers' }] }
+      })
+      return new Response(JSON.stringify({ 'subsonic-response': { status: 'ok', searchResult3: { song } } }))
+    }
+  }
+
+  test('keeps only songs crediting the artist, lead or featured, across pages', async () => {
+    const seen: number[] = []
+    const songs = await new SubsonicClient(session, searchFetch(1200, seen)).getArtistSongs('mm', 'Mark Mathers')
+    expect(seen).toEqual([0, 500, 1000])
+    expect(songs.length).toBe(800)
+    expect(songs.some((t) => t.title.startsWith('Other'))).toBe(false)
+    expect(songs.some((t) => t.title.startsWith('Feat'))).toBe(true)
+  })
+
+  test('a single short page is one request', async () => {
+    const seen: number[] = []
+    const songs = await new SubsonicClient(session, searchFetch(3, seen)).getArtistSongs('mm', 'Mark Mathers')
+    expect(seen).toEqual([0])
+    expect(songs.map((t) => t.id)).toEqual(['s1', 's2'])
+  })
+})

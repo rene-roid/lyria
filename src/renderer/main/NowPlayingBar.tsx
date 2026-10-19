@@ -9,6 +9,7 @@ import { useClient, useSettings } from '@renderer/shared/sessionStore'
 import { nav, useNav } from './nav'
 import { useContextMenu } from './components/ContextMenu'
 import { TrackMenu } from './components/TrackList'
+import { ArtistLinks } from './components/ArtistLinks'
 
 export function NowPlayingBar() {
   const track = usePlayerState((s) => s.track)
@@ -57,16 +58,14 @@ export function NowPlayingBar() {
             <div className="min-w-0">
               <button
                 className="block max-w-full truncate text-sm font-semibold hover:underline"
+                title={track.title}
                 onClick={() => track.albumId && nav.go({ name: 'album', id: track.albumId })}
               >
                 {track.title}
               </button>
-              <button
-                className="block max-w-full truncate text-xs text-ink-2 hover:text-ink hover:underline"
-                onClick={() => track.artistId && nav.go({ name: 'artist', id: track.artistId })}
-              >
-                {track.artist}
-              </button>
+              <div className="truncate text-xs text-ink-2" title={track.artist}>
+                <ArtistLinks track={track} className="hover:text-ink" />
+              </div>
             </div>
             <FavoriteButton {...star} />
           </>

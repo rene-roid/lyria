@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { Heart, Loader2, Play } from 'lucide-react'
-import type { AlbumID3, ArtistID3 } from '@shared/subsonic/types'
+import { Heart, Loader2, Pause, Play } from 'lucide-react'
+import { player } from '@renderer/shared/playerStore'
+import type { AlbumID3, ArtistID3, Playlist } from '@shared/subsonic/types'
+import { parseMix } from '@shared/navimix'
 import type { SubsonicClient } from '@shared/subsonic/client'
-import type { RecentItem, Track } from '@shared/types'
+import { viewKey, type RecentItem, type Track } from '@shared/types'
 import { parseDiscName } from '@shared/format'
 import { Cover } from '@renderer/shared/Cover'
 import { useClient } from '@renderer/shared/sessionStore'
 import { nav, type View } from '../nav'
-import { albumRecent, playFrom } from '../recents'
-import { SectionHeader, Spinner } from './ui'
+import { albumRecent, playFrom, usePlayingState } from '../recents'
+import { playlistRecent } from '../playlists'
+import { ServerMixCover } from './MixCover'
+import { SectionHeader } from './ui'
 
 /**
  * A shelf card, as on the web UI's Home: square artwork with a green play button that rises in on
@@ -21,6 +25,7 @@ export function Card({
   subtitle,
   onOpen,
   onPlay,
+  from,
   round = false
 }: {
   art: React.ReactNode
@@ -28,11 +33,15 @@ export function Card({
   subtitle: string
   onOpen: () => void
   onPlay?: () => Promise<void> | void
+  /** The `viewKey` the card opens; while the queue came from there, its button pauses and resumes. */
+  from?: string
   round?: boolean
 }) {
   const [busy, setBusy] = useState(false)
+  const { current, playing } = usePlayingState(from)
   const play = (e: React.MouseEvent): void => {
     e.stopPropagation()
+    if (current) return player.toggle()
     if (busy || !onPlay) return
     setBusy(true)
     void Promise.resolve(onPlay()).finally(() => setBusy(false))
@@ -48,17 +57,27 @@ export function Card({
         {onPlay && (
           <button
             onClick={play}
-            title={`Play ${title}`}
+            title={playing ? 'Pause' : `Play ${title}`}
             className={`absolute right-2 bottom-2 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-black shadow-[0_8px_8px_rgba(0,0,0,0.3)] transition hover:scale-105 hover:bg-accent-2 focus-visible:translate-y-0 focus-visible:opacity-100 ${
-              busy ? '' : 'translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100'
+              busy || playing ? '' : 'translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100'
             }`}
           >
-            {busy ? <Loader2 size={22} className="animate-spin" /> : <Play size={22} fill="currentColor" className="ml-0.5" />}
+            {busy ? (
+              <Loader2 size={22} className="animate-spin" />
+            ) : playing ? (
+              <Pause size={22} fill="currentColor" />
+            ) : (
+              <Play size={22} fill="currentColor" className="ml-0.5" />
+            )}
           </button>
         )}
       </div>
-      <div className="mt-2 truncate text-[15px] font-bold">{title}</div>
-      <div className="mt-1 line-clamp-2 text-sm text-ink-2">{subtitle}</div>
+      <div className="mt-2 truncate text-[15px] font-bold" title={title}>
+        {title}
+      </div>
+      <div className="mt-1 line-clamp-2 text-sm text-ink-2" title={subtitle}>
+        {subtitle}
+      </div>
     </div>
   )
 }
@@ -79,6 +98,7 @@ export function AlbumCard({ album, discIds }: { album: AlbumID3; discIds?: strin
       subtitle={`${album.year ? `${album.year} • ` : ''}${album.artist ?? 'Unknown artist'}`}
       onOpen={() => nav.go({ name: 'album', id: album.id, discIds })}
       onPlay={playAlbum}
+      from={albumRecent(album, discIds).key}
     />
   )
 }
@@ -91,6 +111,31 @@ export function ArtistCard({ artist }: { artist: ArtistID3 }) {
       title={artist.name}
       subtitle={artist.albumCount ? `${artist.albumCount} album${artist.albumCount === 1 ? '' : 's'}` : 'Artist'}
       onOpen={() => nav.go({ name: 'artist', id: artist.id })}
+    />
+  )
+}
+
+/** A playlist, or a NaviBeat/Explo mix drawn and titled the way the web UI shows it. */
+export function PlaylistCard({ playlist: p }: { playlist: Playlist }) {
+  const client = useClient()
+  const mix = parseMix(p.name, p.comment)
+  return (
+    <Card
+      art={
+        mix ? (
+          <ServerMixCover mix={mix} coverArt={p.coverArt} />
+        ) : (
+          <Cover id={p.coverArt} size={300} className="h-full w-full" rounded="" />
+        )
+      }
+      title={mix?.title ?? p.name}
+      subtitle={mix?.description ?? `By ${p.owner ?? 'you'}`}
+      onOpen={() => nav.go({ name: 'playlist', id: p.id })}
+      from={viewKey({ name: 'playlist', id: p.id })}
+      onPlay={async () => {
+        const songs = client ? (await client.getPlaylist(p.id)).entry : []
+        if (songs.length) playFrom(songs, 0, playlistRecent(p))
+      }}
     />
   )
 }
@@ -199,13 +244,16 @@ export function Tile({
 }) {
   const client = useClient()
   const [busy, setBusy] = useState(false)
+  const from = recent?.key ?? (view && viewKey(view))
+  const { current, playing } = usePlayingState(from)
   const play = async (e?: React.MouseEvent): Promise<void> => {
     e?.stopPropagation()
+    if (current) return player.toggle()
     if (!client || busy) return
     setBusy(true)
     try {
       const tracks = await load(client)
-      if (tracks.length) playFrom(tracks, 0, recent)
+      if (tracks.length) playFrom(tracks, 0, recent, from)
     } finally {
       setBusy(false)
     }
@@ -217,14 +265,27 @@ export function Tile({
         className="flex h-16 w-full items-center gap-3 overflow-hidden rounded-md bg-white/[0.07] text-left transition hover:bg-white/[0.14]"
       >
         <div className="h-16 w-16 shrink-0">{art}</div>
-        <div className="line-clamp-2 min-w-0 flex-1 pr-14 text-sm font-semibold leading-tight">{title}</div>
+        <div
+          className={`line-clamp-2 min-w-0 flex-1 pr-14 text-sm font-semibold leading-tight ${current ? 'text-accent' : ''}`}
+          title={title}
+        >
+          {title}
+        </div>
       </button>
       <button
         onClick={play}
-        title={`Play ${title}`}
-        className="absolute top-1/2 right-3 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-accent text-black opacity-0 shadow-xl transition group-hover:opacity-100 hover:scale-105 focus-visible:opacity-100"
+        title={playing ? 'Pause' : `Play ${title}`}
+        className={`absolute top-1/2 right-3 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-accent text-black shadow-xl transition hover:scale-105 focus-visible:opacity-100 ${
+          busy || playing ? '' : 'opacity-0 group-hover:opacity-100'
+        }`}
       >
-        {busy ? <Spinner className="h-5 w-5" /> : <Play size={18} fill="currentColor" className="ml-0.5" />}
+        {busy ? (
+          <Loader2 size={18} className="animate-spin" />
+        ) : playing ? (
+          <Pause size={18} fill="currentColor" />
+        ) : (
+          <Play size={18} fill="currentColor" className="ml-0.5" />
+        )}
       </button>
     </div>
   )

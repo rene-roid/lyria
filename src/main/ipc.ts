@@ -172,7 +172,7 @@ export function setupIpc(): void {
       const previous = loadSession()
       if (previous?.username !== session.username || previous.server !== session.server) {
         // Recents, saved mixes and picked backgrounds all belong to the account that left.
-        broadcast('settings:changed', [updateSettings({ recents: [], savedMixes: [] })])
+        broadcast('settings:changed', [updateSettings({ recents: [], savedMixes: [], savedPlaylists: [] })])
         void artCache.clear()
       }
       saveSession(session)
@@ -208,7 +208,7 @@ export function setupIpc(): void {
 
   ipcMain.handle('auth:logout', () => {
     clearSession()
-    broadcast('settings:changed', [updateSettings({ recents: [], savedMixes: [] })])
+    broadcast('settings:changed', [updateSettings({ recents: [], savedMixes: [], savedPlaylists: [] })])
     void artCache.clear()
     sendCommand('stop')
     broadcast('auth:changed', [null])

@@ -73,3 +73,42 @@ export function groupDiscs<T extends { id: string; name: string; year?: number; 
     return { album: lead.album, discIds: byDisc.filter((e) => e !== lead).map((e) => e.album.id) }
   })
 }
+
+export interface Credit {
+  id: string
+  name: string
+}
+
+/**
+ * A song's artist line cut into pieces, each credited artist's name its own piece with their id,
+ * and the song's own joining words ("&", ", ", " feat. ") kept as plain text between them, so
+ * "Sān-Z & HOYO-MiX" reads as it is tagged while both names link. When the tag and the credits
+ * disagree (a name spelled or ordered differently), the line is the credited names alone, joined
+ * by commas as Spotify shows them, so nobody is listed twice and every credited artist links.
+ */
+export function splitCredits(line: string, credits: Credit[]): { text: string; id?: string }[] {
+  const lower = line.toLowerCase()
+  const parts: { text: string; id?: string }[] = []
+  const left = [...credits]
+  let at = 0
+  while (left.length) {
+    // The credit that shows up next in the line; the longer name wins a tie ("Ado" inside "Adore").
+    let best = -1
+    let bestAt = Infinity
+    left.forEach((c, i) => {
+      const found = c.name ? lower.indexOf(c.name.toLowerCase(), at) : -1
+      if (found >= 0 && (found < bestAt || (found === bestAt && c.name.length > left[best].name.length))) {
+        best = i
+        bestAt = found
+      }
+    })
+    if (best < 0) break
+    const [c] = left.splice(best, 1)
+    if (bestAt > at) parts.push({ text: line.slice(at, bestAt) })
+    parts.push({ text: line.slice(bestAt, bestAt + c.name.length), id: c.id })
+    at = bestAt + c.name.length
+  }
+  if (left.length) return credits.flatMap((c, i) => [...(i ? [{ text: ', ' }] : []), { text: c.name, id: c.id }])
+  if (at < line.length) parts.push({ text: line.slice(at) })
+  return parts.length ? parts : [{ text: line }]
+}

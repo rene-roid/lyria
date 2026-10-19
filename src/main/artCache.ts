@@ -72,7 +72,9 @@ async function download(id: string): Promise<string | null> {
     const res = await net.fetch(url)
     if (!res.ok) return null
     const body = Buffer.from(await res.arrayBuffer())
-    if (!body.byteLength) return null
+    // Subsonic reports a failure ("Artwork not found") as HTTP 200 with a JSON body, which would
+    // otherwise be kept as the cover and blank it in every window for good.
+    if (!isImage(body)) return null
     await mkdir(dir(), { recursive: true })
     // Write beside the final name and rename, so a crash mid-download leaves no half file behind.
     const part = `${file}.part`
@@ -85,6 +87,8 @@ async function download(id: string): Promise<string | null> {
     return null
   }
 }
+
+const isImage = (b: Buffer): boolean => contentType(b) !== 'application/octet-stream'
 
 /** Content type off the file's own magic bytes; the server's header is not kept with the file. */
 function contentType(b: Buffer): string {
@@ -115,6 +119,11 @@ export function registerArtProtocol(): void {
     if (!file) return new Response(null, { status: 404 })
     try {
       const body = await readFile(file)
+      // Kept by a build that stored error replies too: drop it so the next ask downloads it again.
+      if (!isImage(body)) {
+        await rm(file, { force: true })
+        return new Response(null, { status: 404 })
+      }
       return new Response(new Uint8Array(body.buffer, body.byteOffset, body.byteLength), {
         // Allowed anywhere, so a page can read a cover's pixels back for its header colour.
         headers: {

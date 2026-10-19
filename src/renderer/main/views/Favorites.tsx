@@ -1,12 +1,16 @@
 import { Shuffle } from 'lucide-react'
 import { formatDuration } from '@shared/format'
+import { viewKey } from '@shared/types'
 import { useClient, useSessionStore } from '@renderer/shared/sessionStore'
 import { player } from '@renderer/shared/playerStore'
 import { AlbumCard, ArtistCard, CardGrid, LikedCover } from '../components/AlbumCard'
 import { TrackList } from '../components/TrackList'
-import { ActionIcon, Empty, ErrorBox, Loading, PageTitle, PlayCircle, SectionHeader } from '../components/ui'
+import { ActionIcon, Empty, ErrorBox, Loading, PageTitle, SectionHeader } from '../components/ui'
 import { playFrom } from '../recents'
 import { useAsync } from '../useAsync'
+
+/** Liked Songs is pinned on Home's shelf, so playing it records nothing there, but its buttons still know. */
+const LIKED = viewKey({ name: 'favorites' })
 
 /** Liked Songs, with the albums and artists starred on the server under it. */
 export function Favorites() {
@@ -33,15 +37,15 @@ export function Favorites() {
             {songs.length > 0 && `, ${formatDuration(total)}`}
           </span>
         }
+        play={{ onClick: () => playFrom(songs, 0, null, LIKED), disabled: !songs.length, from: LIKED }}
         actions={
           <>
-            <PlayCircle onClick={() => playFrom(songs, 0, null)} disabled={!songs.length} />
             <ActionIcon
               title="Shuffle"
               disabled={!songs.length}
               onClick={() => {
                 player.setShuffle(true)
-                playFrom(songs, Math.floor(Math.random() * songs.length), null)
+                playFrom(songs, Math.floor(Math.random() * songs.length), null, LIKED)
               }}
             >
               <Shuffle size={28} />
@@ -51,7 +55,7 @@ export function Favorites() {
       />
       {songs.length > 0 ? (
         <section className="mb-8">
-          <TrackList tracks={songs} origin={null} />
+          <TrackList tracks={songs} origin={null} from={LIKED} />
         </section>
       ) : (
         <Empty>Songs you like will appear here. Hit the heart on any song to save it.</Empty>

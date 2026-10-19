@@ -6,7 +6,7 @@ import { player } from '@renderer/shared/playerStore'
 import { playFrom } from '../recents'
 import type { AsyncState } from '../useAsync'
 import { TrackList } from './TrackList'
-import { ActionIcon, Empty, ErrorBox, Loading, PageTitle, PlayCircle, SearchInput } from './ui'
+import { ActionIcon, Empty, ErrorBox, Loading, PageTitle } from './ui'
 import { tagColor } from './AlbumCard'
 
 /** A flat, searchable, playable list of songs: the shape shared by genre and mix pages. */
@@ -16,7 +16,8 @@ export function TrackPage({
   state,
   origin,
   cover,
-  actions
+  actions,
+  color
 }: {
   eyebrow: string
   title: string
@@ -27,6 +28,8 @@ export function TrackPage({
   cover?: ReactNode
   /** Extra buttons after Play and Shuffle, for whatever else this kind of page can do. */
   actions?: ReactNode
+  /** The header band; defaults to the hue the page's tag artwork is washed with. */
+  color?: string
 }) {
   const [query, setQuery] = useState('')
   const songs = state.data
@@ -42,12 +45,13 @@ export function TrackPage({
       <PageTitle
         eyebrow={eyebrow}
         title={title}
-        color={tagColor(title)}
+        color={color ?? tagColor(title)}
         cover={cover}
         subtitle={`${songs.length} song${songs.length === 1 ? '' : 's'}, ${formatDuration(total)}`}
+        search={{ value: query, onChange: setQuery, placeholder: `Search in this ${eyebrow.toLowerCase()}` }}
+        play={{ onClick: () => playFrom(songs, 0, origin), disabled: !songs.length, from: origin.key }}
         actions={
           <>
-            <PlayCircle onClick={() => playFrom(songs, 0, origin)} disabled={!songs.length} />
             <ActionIcon
               title="Shuffle"
               disabled={!songs.length}
@@ -62,7 +66,6 @@ export function TrackPage({
           </>
         }
       />
-      <SearchInput value={query} onChange={setQuery} placeholder={`Search in this ${eyebrow.toLowerCase()}`} />
       {songs.length === 0 ? (
         <Empty>Nothing here</Empty>
       ) : shown.length === 0 ? (

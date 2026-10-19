@@ -70,6 +70,8 @@ export interface Child {
   discNumber?: number
   albumId?: string
   artistId?: string
+  /** OpenSubsonic: every artist credited on the song, featured ones included. */
+  artists?: { id: string; name: string }[]
   type?: string
   starred?: string
   playCount?: number

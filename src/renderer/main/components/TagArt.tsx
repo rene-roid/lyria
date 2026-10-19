@@ -2,15 +2,15 @@
  * The three background looks, one per kind of thing that has no artwork of its own.
  *
  * Moods get a single cover duotoned to the mood's colour, genres a tinted four-cover mosaic and
- * mixes a fanned deck over a blur of itself, so a glance at Home's shelf says which is which
+ * mixes navidroid's photo under a colour band, so a glance at Home's shelf says which is which
  * before the label is read. Which covers each one wears is `tagArt`'s business, not this file's.
  */
 import { useState } from 'react'
-import { MicVocal, Smile, Sparkles } from 'lucide-react'
-import type { MixKind } from '@shared/types'
+import { paletteColor } from '@shared/navimix'
 import { useCoverUrl } from '@renderer/shared/Cover'
 import { ART_COUNT, useTagArt, type ArtRef } from '../tagArt'
 import { gradient, hue } from './AlbumCard'
+import { MixCover } from './MixCover'
 
 /** A cover behind a tag. Renders nothing at all if it is not there and cannot be got. */
 function ArtImage({ id, className = '' }: { id: string; className?: string }) {
@@ -74,63 +74,22 @@ function GenreArt({ name, ids }: { name: string; ids: string[] }) {
   )
 }
 
-/** What a mix was seeded from, marked in the corner of its deck. */
-const MIX_ICONS: Record<MixKind, typeof Sparkles> = { genre: Sparkles, mood: Smile, artist: MicVocal }
-
-/** Where each card of the deck sits, in percent of the deck's width and in degrees. Front first. */
-const FAN = [
-  { shift: 0, rotate: 0 },
-  { shift: -32, rotate: -14 },
-  { shift: 32, rotate: 14 }
-]
-
-/** A fanned deck of covers floating over a blown-up blur of the first one. */
-function MixArt({ name, ids, kind }: { name: string; ids: string[]; kind: MixKind }) {
-  const deck = ids.slice(0, ART_COUNT.mix)
-  const Icon = MIX_ICONS[kind]
-  return (
-    <>
-      <ArtImage id={ids[0]} className="scale-150 blur-xl saturate-150" />
-      <div
-        className="absolute inset-0"
-        style={{ background: `linear-gradient(160deg, hsl(${hue(name)} 75% 32% / 0.5), rgba(0,0,0,0.78))` }}
-      />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="relative aspect-square h-[58%]">
-          {deck.map((id, i) => (
-            <div
-              key={`${id}:${i}`}
-              className="absolute inset-0 overflow-hidden rounded-[14%] shadow-lg ring-1 ring-white/25"
-              style={{
-                transform: `translateX(${FAN[i].shift}%) rotate(${FAN[i].rotate}deg)`,
-                zIndex: deck.length - i
-              }}
-            >
-              <ArtImage id={id} />
-            </div>
-          ))}
-        </div>
-      </div>
-      <Icon className="absolute top-[7%] right-[7%] h-[15%] w-[15%] text-white/80 drop-shadow" />
-    </>
-  )
-}
-
 /**
  * Fills whatever box it is put in. `name` is the label shown over it, and seeds the colour the
  * style tints with, so the card keeps its identity while the covers underneath turn over.
  */
-export function TagArt({ art, name }: { art: ArtRef; name: string }) {
+export function TagArt({ art, name, fallback }: { art: ArtRef; name: string; fallback?: string }) {
   const ids = useTagArt(art)
+  // Sonora's own mixes are drawn like the server's NaviBeat ones: a real cover under a colour band.
+  // `fallback` is for a kept mix whose tag no longer has covers to pick: its own first song's.
+  if (art.style === 'mix') return <MixCover title={name} color={paletteColor(art.seed.value)} art={ids[0] ?? fallback} photo />
   return (
     <div className="relative h-full w-full overflow-hidden" style={{ background: gradient(name) }}>
       {ids.length > 0 &&
         (art.style === 'mood' ? (
           <MoodArt name={name} ids={ids} />
-        ) : art.style === 'genre' ? (
-          <GenreArt name={name} ids={ids} />
         ) : (
-          <MixArt name={name} ids={ids} kind={art.seed.kind} />
+          <GenreArt name={name} ids={ids} />
         ))}
     </div>
   )
@@ -140,10 +99,10 @@ export function TagArt({ art, name }: { art: ArtRef; name: string }) {
  * The same background at the size an album cover gets, for the top of the page a tile leads to.
  * Opening a mood, genre or mix should land on the picture that was clicked, not a bare heading.
  */
-export function TagArtCover({ art, name }: { art: ArtRef; name: string }) {
+export function TagArtCover({ art, name, fallback }: { art: ArtRef; name: string; fallback?: string }) {
   return (
-    <div className="h-52 w-52 shrink-0 overflow-hidden rounded-md shadow-2xl">
-      <TagArt art={art} name={name} />
+    <div className="h-52 w-52 shrink-0 overflow-hidden rounded-md">
+      <TagArt art={art} name={name} fallback={fallback} />
     </div>
   )
 }
