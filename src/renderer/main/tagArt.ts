@@ -15,8 +15,11 @@ import { allAlbums } from './albumList'
 import { useClient } from '@renderer/shared/sessionStore'
 import { shuffle, seedOfView, type MixSeed } from './mixes'
 
-/** Which of the three looks draws the background. A mix is styled as a mix whatever it is seeded from. */
-export type ArtStyle = 'mood' | 'genre' | 'mix'
+/**
+ * Which look draws the background: a genre's or mood's poster, or a mix's colour band. A mix is
+ * styled as a mix whatever it is seeded from.
+ */
+export type ArtStyle = 'genre' | 'mix'
 
 /** A background: the style that draws it, and the tag whose music the covers come from. */
 export interface ArtRef {
@@ -29,13 +32,12 @@ export interface ArtRef {
  * because their track list does; a library's moods and genres move far more slowly than that.
  */
 const ROTATE_MS: Record<ArtStyle, number> = {
-  mood: 12 * 60 * 60 * 1000,
   genre: 24 * 60 * 60 * 1000,
   mix: 24 * 60 * 60 * 1000
 }
 
-/** How many covers each style draws. */
-export const ART_COUNT: Record<ArtStyle, number> = { mood: 1, genre: 4, mix: 3 }
+/** How many covers each style picks: a poster shows one, but holds spares to dodge another tile's. */
+const ART_COUNT: Record<ArtStyle, number> = { genre: 4, mix: 3 }
 
 /** Songs asked for when a genre has to be read off the server. The whole answer is then in play. */
 const GENRE_SONGS = 500
@@ -57,7 +59,7 @@ const epochOf = (style: ArtStyle): number => Math.floor(Date.now() / ROTATE_MS[s
 export function artRefOf(view: View | undefined): ArtRef | null {
   switch (view?.name) {
     case 'mood':
-      return { style: 'mood', seed: { kind: 'mood', value: view.value } }
+      return { style: 'genre', seed: { kind: 'mood', value: view.value } }
     case 'genre':
       return { style: 'genre', seed: { kind: 'genre', value: view.value } }
     case 'mix':

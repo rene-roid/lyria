@@ -47,7 +47,7 @@ export const ALBUM_FETCH_LIMIT = 6
 /** Compilation and placeholder credits make a nonsense artist mix, so they never become seeds. */
 const NOT_AN_ARTIST = /^(various(\s+artists)?|va|unknown artist|soundtrack|\[?unknown\]?)$/i
 
-function seedOf(s: string): number {
+export function seedOf(s: string): number {
   let h = 2166136261
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
   return h >>> 0

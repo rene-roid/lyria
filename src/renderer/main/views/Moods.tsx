@@ -7,7 +7,7 @@ import { mapLimit } from '@shared/async'
 import { useClient } from '@renderer/shared/sessionStore'
 import { player } from '@renderer/shared/playerStore'
 import { AlbumCard, CardGrid } from '../components/AlbumCard'
-import { BrowseCard, BrowseCover, BrowseGrid, useBrowseArt } from '../components/TagArt'
+import { BrowseCard, BrowseGrid, TagArtCover, TagPill, TailSection, splitTail, useBrowseArt } from '../components/TagArt'
 import { ActionIcon, Empty, ErrorBox, Loading, PageTitle, SearchInput } from '../components/ui'
 import { nav } from '../nav'
 import { recentOf, playFrom } from '../recents'
@@ -22,6 +22,9 @@ const useAlbums = (): AsyncState<AlbumID3[]> => {
   const client = useClient()
   return useAsync('albums:all', () => client?.getAllAlbums(), [client])
 }
+
+/** Albums a mood needs for a tile of its own, past the first few; the rest are pills below. */
+const TILE_ALBUMS = 2
 
 const moodRecent = (value: string) => recentOf({ name: 'mood', value }, capitalize(value), 'Mood')
 
@@ -50,6 +53,7 @@ export function Moods() {
       .filter(([m]) => !q || m.toLowerCase().includes(q))
       .sort((a, b) => b[1] - a[1])
   }, [state.data, filter])
+  const [tiles, tail] = splitTail(moods, ([, count]) => count, TILE_ALBUMS)
 
   return (
     <div>
@@ -60,8 +64,8 @@ export function Moods() {
       {state.data && moods.length === 0 && (
         <Empty>{filter ? 'No moods match' : 'No mood tags in this library'}</Empty>
       )}
-      <BrowseGrid>
-        {moods.map(([mood, count]) => (
+      <BrowseGrid square>
+        {tiles.map(([mood, count]) => (
           <BrowseCard
             key={mood}
             seed={{ kind: 'mood', value: mood }}
@@ -72,6 +76,19 @@ export function Moods() {
           />
         ))}
       </BrowseGrid>
+      {tail.length > 0 && (
+        <TailSection title="More moods">
+          {tail.map(([mood, count]) => (
+            <TagPill
+              key={mood}
+              seed={{ kind: 'mood', value: mood }}
+              name={capitalize(mood)}
+              count={count}
+              onOpen={() => nav.go({ name: 'mood', value: mood })}
+            />
+          ))}
+        </TailSection>
+      )}
     </div>
   )
 }
@@ -82,7 +99,8 @@ export function MoodView({ value }: { value: string }) {
   const [query, setQuery] = useState('')
 
   const albums = useMemo(() => (state.data ?? []).filter((a) => hasMood(a, value)), [state.data, value])
-  const { cover, color } = useBrowseArt({ kind: 'mood', value }, capitalize(value))
+  const seed = { kind: 'mood', value } as const
+  const { color } = useBrowseArt(seed)
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return albums
@@ -102,7 +120,7 @@ export function MoodView({ value }: { value: string }) {
         eyebrow="Mood"
         title={capitalize(value)}
         color={color}
-        cover={<BrowseCover cover={cover} />}
+        cover={<TagArtCover art={{ style: 'genre', seed }} name={capitalize(value)} />}
         subtitle={`${albums.length} album${albums.length === 1 ? '' : 's'}`}
         search={{ value: query, onChange: setQuery, placeholder: 'Search in this mood' }}
         play={{ onClick: () => playAll(false), disabled: !albums.length, from: moodRecent(value).key }}

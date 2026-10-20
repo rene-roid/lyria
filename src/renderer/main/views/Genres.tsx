@@ -2,12 +2,15 @@ import { useMemo, useState } from 'react'
 import type { Genre } from '@shared/subsonic/types'
 import { capitalize } from '@shared/format'
 import { useClient } from '@renderer/shared/sessionStore'
-import { BrowseCard, BrowseCover, BrowseGrid, useBrowseArt } from '../components/TagArt'
+import { BrowseCard, BrowseGrid, TagArtCover, TagPill, TailSection, splitTail, useBrowseArt } from '../components/TagArt'
 import { TrackPage } from '../components/TrackPage'
 import { Empty, ErrorBox, Loading, PageTitle, SearchInput } from '../components/ui'
 import { nav } from '../nav'
 import { recentOf, playFrom } from '../recents'
 import { useAsync } from '../useAsync'
+
+/** Songs a genre needs for a tile of its own, past the first few; the rest are pills below. */
+const TILE_SONGS = 10
 
 const genreRecent = (value: string) => recentOf({ name: 'genre', value }, capitalize(value), 'Genre')
 
@@ -38,6 +41,7 @@ export function Genres() {
       .filter((g) => g.value && (!q || g.value.toLowerCase().includes(q)))
       .sort((a, b) => (b.songCount ?? 0) - (a.songCount ?? 0))
   }, [state.data, filter])
+  const [tiles, tail] = splitTail(filtered, (g) => g.songCount ?? 0, TILE_SONGS)
 
   return (
     <div>
@@ -46,7 +50,20 @@ export function Genres() {
       {state.loading && <Loading />}
       {state.error && <ErrorBox message={state.error} onRetry={state.reload} />}
       {state.data && filtered.length === 0 && <Empty>No genres match</Empty>}
-      <BrowseGrid>{filtered.map((g) => <GenreCard key={g.value} genre={g} />)}</BrowseGrid>
+      <BrowseGrid>{tiles.map((g) => <GenreCard key={g.value} genre={g} />)}</BrowseGrid>
+      {tail.length > 0 && (
+        <TailSection title="More genres">
+          {tail.map((g) => (
+            <TagPill
+              key={g.value}
+              seed={{ kind: 'genre', value: g.value }}
+              name={capitalize(g.value)}
+              count={g.songCount ?? 0}
+              onOpen={() => nav.go({ name: 'genre', value: g.value })}
+            />
+          ))}
+        </TailSection>
+      )}
     </div>
   )
 }
@@ -54,7 +71,8 @@ export function Genres() {
 export function GenreView({ value }: { value: string }) {
   const client = useClient()
   const state = useAsync(`genre:${value}`, () => client?.getSongsByGenre(value), [client, value])
-  const { cover, color } = useBrowseArt({ kind: 'genre', value }, capitalize(value))
+  const seed = { kind: 'genre', value } as const
+  const { color } = useBrowseArt(seed)
   return (
     <TrackPage
       eyebrow="Genre"
@@ -62,7 +80,7 @@ export function GenreView({ value }: { value: string }) {
       state={state}
       origin={genreRecent(value)}
       color={color}
-      cover={<BrowseCover cover={cover} />}
+      cover={<TagArtCover art={{ style: 'genre', seed }} name={capitalize(value)} />}
     />
   )
 }
