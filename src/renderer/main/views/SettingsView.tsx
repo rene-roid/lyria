@@ -9,10 +9,11 @@ import type {
   Session,
   Settings,
   SettingsPatch,
+  ThemeName,
   ToastOptions,
   WidgetOptions
 } from '@shared/types'
-import { OVERLAY_ANCHORS, OVERLAY_BACKGROUNDS } from '@shared/types'
+import { OVERLAY_ANCHORS, OVERLAY_BACKGROUNDS, THEMES } from '@shared/types'
 import type { ServerProbe } from '@shared/subsonic/client'
 import { useSessionStore, useSettings } from '@renderer/shared/sessionStore'
 import { GhostButton, PageTitle, Range, SectionHeader, Spinner } from '../components/ui'
@@ -406,6 +407,35 @@ function ToastSettings({
   )
 }
 
+function ThemePicker({ value, onChange }: { value: ThemeName; onChange: (v: ThemeName) => void }) {
+  return (
+    <div className="flex items-center justify-between gap-6 rounded-md px-3 py-3">
+      <div>
+        <div className="text-sm font-medium">Accent colour</div>
+        <div className="text-xs text-ink-2">Buttons, sliders and highlights in every Sonora window</div>
+      </div>
+      <div className="flex shrink-0 rounded-md border border-white/10 p-0.5">
+        {THEMES.map((t) => (
+          <button
+            key={t.value}
+            aria-pressed={value === t.value}
+            onClick={() => onChange(t.value)}
+            className={`flex items-center gap-2 rounded px-2.5 py-1 text-xs transition ${
+              value === t.value ? 'bg-white/10 font-semibold text-ink' : 'text-ink-2 hover:text-ink'
+            }`}
+          >
+            <span
+              className="h-3 w-3 rounded-full"
+              style={{ background: t.accent }}
+            />
+            {t.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const NORMALIZE_MODES: { value: NormalizeMode; label: string }[] = [
   { value: 'off', label: 'Off' },
   { value: 'album', label: 'Per album' },
@@ -545,6 +575,11 @@ export function SettingsView() {
   return (
     <div className="max-w-2xl">
       <PageTitle title="Settings" subtitle={`Signed in as ${session?.username} · ${session?.server}`} />
+
+      <section className="mb-8">
+        <SectionHeader title="Appearance" />
+        <ThemePicker value={settings.theme} onChange={(theme) => update({ theme })} />
+      </section>
 
       <section className="mb-8">
         <SectionHeader title="Widgets" />

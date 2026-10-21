@@ -23,6 +23,12 @@
   --color-stroke: rgba(255, 255, 255, 0.1);
 }
 
+/* Accent picked in Settings; set on <html> by the session bridge. Unlayered, so it beats @theme. */
+[data-theme='blue'] {
+  --color-accent: #3b82f6;
+  --color-accent-2: #60a5fa;
+}
+
 @layer base {
   html,
   body,

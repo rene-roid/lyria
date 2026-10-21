@@ -24,6 +24,7 @@ export function initSessionBridge(): void {
   if (initialised) return
   initialised = true
   const set = useSessionStore.setState
+  document.documentElement.dataset.theme = defaultSettings.theme
   const apply = (session: Session | null): void => {
     // Scoped to the first candidate, not the active one, so failing over keeps the cached views warm.
     setCacheScope(session ? `${session.servers?.[0] ?? session.server}|${session.username}` : '')
@@ -41,8 +42,12 @@ export function initSessionBridge(): void {
     if ((session?.servers?.length ?? 0) > 1) void window.sonora.auth.reselect()
   })
   window.sonora.auth.onChange(apply)
-  void window.sonora.settings.get().then((settings) => set({ settings }))
-  window.sonora.settings.onChange((settings) => set({ settings }))
+  const applySettings = (settings: Settings): void => {
+    document.documentElement.dataset.theme = settings.theme
+    set({ settings })
+  }
+  void window.sonora.settings.get().then(applySettings)
+  window.sonora.settings.onChange(applySettings)
 }
 
 export function useClient(): SubsonicClient | null {

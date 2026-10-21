@@ -29,6 +29,13 @@ export interface Track {
 
 export type NormalizeMode = 'off' | 'track' | 'album'
 
+export type ThemeName = 'blue' | 'green'
+
+export const THEMES: { value: ThemeName; label: string; accent: string }[] = [
+  { value: 'blue', label: 'Blue', accent: '#3b82f6' },
+  { value: 'green', label: 'Green', accent: '#1db954' }
+]
+
 /**
  * Linear gain factor for a track under `mode`, clamped so peak * gain never clips.
  * Album mode keeps a record's internal loudness shape and only levels between albums.
@@ -382,6 +389,7 @@ export interface Settings {
   savedPlaylists: string[]
   /** Also match soundtrack wording in the album title, not just the genre tag. */
   soundtrackTitleMatch: boolean
+  theme: ThemeName
 }
 
 export const defaultSettings: Settings = {
@@ -405,7 +413,8 @@ export const defaultSettings: Settings = {
   artCacheMaxMb: 256,
   savedMixes: [],
   savedPlaylists: [],
-  soundtrackTitleMatch: true
+  soundtrackTitleMatch: true,
+  theme: 'blue'
 }
 
 /**
