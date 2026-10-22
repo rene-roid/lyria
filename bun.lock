@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "sonora",
+      "name": "lyria",
       "dependencies": {
         "@electron-toolkit/utils": "^4.0.0",
         "@fluentui/tokens": "^1.0.0-alpha.21",

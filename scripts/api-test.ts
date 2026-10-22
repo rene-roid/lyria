@@ -3,7 +3,7 @@
  *
  *   bun run scripts/api-test.ts --server http://localhost:4533 --user admin --pass secret [--song <id>]
  *
- * Or via env: SONORA_SERVER, SONORA_USER, SONORA_PASS
+ * Or via env: LYRIA_SERVER, LYRIA_USER, LYRIA_PASS
  */
 import { SubsonicClient, credentialsFromPassword, normalizeServerUrl } from '../src/shared/subsonic/client'
 import { fromStructuredLyrics } from '../src/shared/lyrics'
@@ -14,10 +14,10 @@ function arg(name: string, env: string): string | undefined {
   return process.env[env]
 }
 
-const server = arg('server', 'SONORA_SERVER')
-const user = arg('user', 'SONORA_USER')
-const pass = arg('pass', 'SONORA_PASS')
-const songArg = arg('song', 'SONORA_SONG')
+const server = arg('server', 'LYRIA_SERVER')
+const user = arg('user', 'LYRIA_USER')
+const pass = arg('pass', 'LYRIA_PASS')
+const songArg = arg('song', 'LYRIA_SONG')
 
 if (!server || !user || !pass) {
   console.error('usage: bun run scripts/api-test.ts --server <url> --user <name> --pass <password> [--song <id>]')

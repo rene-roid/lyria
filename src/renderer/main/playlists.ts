@@ -51,7 +51,7 @@ export function useSavedPlaylists(): string[] {
 /** Heart a playlist into Your Library, or take it back out. Local to this install. */
 export function toggleSavedPlaylist(id: string): void {
   const saved = useSessionStore.getState().settings.savedPlaylists
-  void window.sonora.settings.update({ savedPlaylists: saved.includes(id) ? saved.filter((s) => s !== id) : [id, ...saved] })
+  void window.lyria.settings.update({ savedPlaylists: saved.includes(id) ? saved.filter((s) => s !== id) : [id, ...saved] })
 }
 
 /** Saved ones first, each group keeping the order it came in. */

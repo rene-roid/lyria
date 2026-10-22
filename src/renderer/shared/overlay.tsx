@@ -3,7 +3,7 @@ import { OVERLAY_FADE_MS, overlayOpacity, type OverlayBackground, type OverlayCh
 
 /** Whether this window sits on the system's acrylic backdrop under the given background mode. */
 export function nativeAcrylic(background: OverlayBackground): boolean {
-  return background === 'acrylic' && window.sonora.nativeAcrylic
+  return background === 'acrylic' && window.lyria.nativeAcrylic
 }
 
 /**
@@ -19,7 +19,7 @@ export function overlayCard(background: OverlayBackground): string {
 /** Whether the pointer is over this window. Main watches the cursor and tells us. */
 function useHovered(): boolean {
   const [hovered, setHovered] = useState(false)
-  useEffect(() => window.sonora.overlay.onHover(setHovered), [])
+  useEffect(() => window.lyria.overlay.onHover(setHovered), [])
   return hovered
 }
 
@@ -37,15 +37,15 @@ function useClickThrough(enabled: boolean): void {
     const ignore = (next: boolean): void => {
       if (next === ignoring) return
       ignoring = next
-      window.sonora.window.setIgnoreMouse(next)
+      window.lyria.window.setIgnoreMouse(next)
     }
     ignore(true)
-    const off = window.sonora.overlay.onHitTest((p) => {
+    const off = window.lyria.overlay.onHitTest((p) => {
       ignore(!p || !document.elementFromPoint(p.x, p.y)?.closest('button, .no-drag'))
     })
     return () => {
       off()
-      window.sonora.window.setIgnoreMouse(false)
+      window.lyria.window.setIgnoreMouse(false)
     }
   }, [enabled])
 }

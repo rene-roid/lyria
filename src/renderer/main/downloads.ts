@@ -13,8 +13,8 @@ let listening = false
 function listen(): void {
   if (listening) return
   listening = true
-  window.sonora.downloads.onChange((list) => useStore.setState({ list }))
-  void window.sonora.downloads.list().then((list) => useStore.setState({ list }))
+  window.lyria.downloads.onChange((list) => useStore.setState({ list }))
+  void window.lyria.downloads.list().then((list) => useStore.setState({ list }))
 }
 
 export function useDownloads(): DownloadStatus[] {
@@ -29,7 +29,7 @@ export function useDownload(key: string): DownloadStatus | undefined {
 
 export const downloads = {
   playlist(pl: Playlist & { entry: Track[] }): Promise<void> {
-    return window.sonora.downloads.add({
+    return window.lyria.downloads.add({
       key: downloadKey('playlist', pl.id),
       kind: 'playlist',
       id: pl.id,
@@ -39,7 +39,7 @@ export const downloads = {
     })
   },
   mix(mix: SavedMix): Promise<void> {
-    return window.sonora.downloads.add({
+    return window.lyria.downloads.add({
       key: downloadKey('mix', mix.id),
       kind: 'mix',
       id: mix.id,
@@ -49,6 +49,6 @@ export const downloads = {
     })
   },
   remove(key: string): Promise<void> {
-    return window.sonora.downloads.remove(key)
+    return window.lyria.downloads.remove(key)
   }
 }

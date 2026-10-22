@@ -38,8 +38,8 @@ export function Visualizer({
   }, [playing])
 
   useEffect(() => {
-    window.sonora.player.wantFrames(true)
-    const off = window.sonora.player.on('audioFrame', ({ bins }) => {
+    window.lyria.player.wantFrames(true)
+    const off = window.lyria.player.on('audioFrame', ({ bins }) => {
       const t = target.current
       const n = t.length
       const per = bins.length / n
@@ -54,7 +54,7 @@ export function Visualizer({
     })
     return () => {
       off()
-      window.sonora.player.wantFrames(false)
+      window.lyria.player.wantFrames(false)
     }
   }, [])
 

@@ -30,7 +30,7 @@ function dropAll(): void {
 /** Load what main has on disk. Must finish before the first cacheRead the window cares about. */
 export async function hydrateCache(): Promise<void> {
   try {
-    const saved = await window.sonora.meta.load()
+    const saved = await window.lyria.meta.load()
     scope = saved.scope
     for (const [k, v] of saved.entries) entries.set(k, v)
   } catch {
@@ -50,10 +50,10 @@ function adoptLegacy(): void {
   const legacyScope = localStorage.getItem(LEGACY_SCOPE_KEY)
   if (entries.size === 0 && legacyScope !== null) {
     scope = legacyScope
-    window.sonora.meta.setScope(scope)
+    window.lyria.meta.setScope(scope)
     for (const [k, v] of legacy) {
       entries.set(k, v)
-      window.sonora.meta.put(k, v)
+      window.lyria.meta.put(k, v)
     }
   }
   for (const [k] of legacy) localStorage.removeItem(LEGACY_PREFIX + k)
@@ -65,13 +65,13 @@ export function setCacheScope(next: string): void {
   if (!hydrated || next === scope) return
   scope = next
   dropAll()
-  window.sonora.meta.setScope(next)
+  window.lyria.meta.setScope(next)
 }
 
 /** Empty it on disk too, from the settings panel. */
 export async function clearCache(): Promise<void> {
   dropAll()
-  await window.sonora.meta.clear()
+  await window.lyria.meta.clear()
 }
 
 export function cacheRead<T>(key: string | undefined): T | undefined {
@@ -95,5 +95,5 @@ export function cacheWrite(key: string | undefined, value: unknown): void {
   // Most refreshes bring back exactly what was cached; no point shipping a big list to main again.
   if (raw === undefined || entries.get(key) === raw) return
   entries.set(key, raw)
-  window.sonora.meta.put(key, raw)
+  window.lyria.meta.put(key, raw)
 }

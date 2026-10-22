@@ -18,14 +18,14 @@ function ToastApp() {
   const timer = useRef<number | undefined>(undefined)
 
   useEffect(() => {
-    return window.sonora.toast.onShow(({ track, durationMs }) => {
+    return window.lyria.toast.onShow(({ track, durationMs }) => {
       window.clearTimeout(timer.current)
       setLeaving(false)
       setItem({ key: Date.now(), track, durationMs })
-      window.sonora.toast.shown()
+      window.lyria.toast.shown()
       timer.current = window.setTimeout(() => {
         setLeaving(true)
-        window.sonora.toast.leaving()
+        window.lyria.toast.leaving()
       }, durationMs)
     })
   }, [])
@@ -49,7 +49,7 @@ function ToastApp() {
         onAnimationEnd={() => {
           if (leaving) {
             setItem(null)
-            window.sonora.toast.done()
+            window.lyria.toast.done()
           }
         }}
       >

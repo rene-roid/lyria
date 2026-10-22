@@ -6,7 +6,7 @@ import { join } from 'node:path'
 /** Electron only implements setLoginItemSettings on Windows/macOS, so Linux gets an XDG autostart entry. */
 function linuxDesktopFile(): string {
   const configHome = process.env.XDG_CONFIG_HOME || join(homedir(), '.config')
-  return join(configHome, 'autostart', 'sonora.desktop')
+  return join(configHome, 'autostart', 'lyria.desktop')
 }
 
 function linuxExec(): string {
@@ -29,7 +29,7 @@ export function setAutoLaunch(enabled: boolean): void {
       [
         '[Desktop Entry]',
         'Type=Application',
-        'Name=Sonora',
+        'Name=Lyria',
         `Exec=${linuxExec()} --hidden`,
         'Terminal=false',
         'X-GNOME-Autostart-enabled=true',

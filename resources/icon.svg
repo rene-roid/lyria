@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2c3268"/>
+      <stop offset="0.45" stop-color="#43397a"/>
+      <stop offset="0.7" stop-color="#5a4596"/>
+    </linearGradient>
+    <radialGradient id="haze" cx="0.8" cy="0.62" r="0.45">
+      <stop offset="0" stop-color="#8a64c8" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#8a64c8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="moon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde0d4"/>
+      <stop offset="0.55" stop-color="#f6c2d2"/>
+      <stop offset="1" stop-color="#e0a6dc"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop offset="0.7" stop-color="#f5bede" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#f5bede" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="back" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3e4296"/>
+      <stop offset="1" stop-color="#2e3482"/>
+    </linearGradient>
+    <linearGradient id="mid" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3a3c96"/>
+      <stop offset="0.55" stop-color="#b38ae2"/>
+      <stop offset="1" stop-color="#8e6ed4"/>
+    </linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#232d7a"/>
+      <stop offset="1" stop-color="#0c1438"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.05"/>
+    </linearGradient>
+    <clipPath id="tile">
+      <rect width="512" height="512" rx="96"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="512" height="512" fill="url(#sky)"/>
+    <rect width="512" height="512" fill="url(#haze)"/>
+    <circle cx="258" cy="186" r="128" fill="url(#glow)"/>
+    <circle cx="258" cy="186" r="102" fill="url(#moon)"/>
+    <path d="M0 266C70 244 140 256 210 290S340 344 512 322V512H0Z" fill="url(#back)"/>
+    <path d="M0 404C100 386 180 344 260 312S420 252 512 256V512H0Z" fill="url(#mid)"/>
+    <path d="M0 470C120 452 240 400 340 352S460 304 512 300V512H0Z" fill="#3a3f9e"/>
+    <path d="M180 512C280 440 400 402 512 384V512Z" fill="#0f1844"/>
+    <path d="M0 350C80 334 160 376 240 430S320 512 330 512H0Z" fill="url(#front)"/>
+  </g>
+  <rect x="3" y="3" width="506" height="506" rx="93" fill="none" stroke="url(#rim)" stroke-width="6"/>
+</svg>

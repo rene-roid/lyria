@@ -9,7 +9,7 @@ import { Shrinker } from './shrink'
 import { getSettings } from './store'
 
 /**
- * On-disk cache of cover art, served to the windows over the `sonora-art://` scheme.
+ * On-disk cache of cover art, served to the windows over the `lyria-art://` scheme.
  *
  * A window asks for a cover by id and nothing else: main turns that into a server URL from the
  * saved session, downloads it once and answers from the file every time after. That is what makes

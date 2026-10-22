@@ -13,7 +13,7 @@ export function Login() {
     setBusy(true)
     setError(undefined)
     try {
-      await window.sonora.auth.login({ server, username, password })
+      await window.lyria.auth.login({ server, username, password })
       setPassword('')
     } catch (err) {
       const msg = (err as Error).message ?? String(err)
@@ -32,7 +32,7 @@ export function Login() {
       <div className="flex flex-1 items-center justify-center">
         <form onSubmit={submit} className="w-[380px] rounded-xl border border-stroke bg-surface-2 p-8 shadow-2xl">
           <div className="mb-6">
-            <div className="text-2xl font-extrabold tracking-tight">Sonora</div>
+            <div className="text-2xl font-extrabold tracking-tight">Lyria</div>
             <div className="mt-1 text-sm text-ink-2">Connect to your Navidrome server</div>
           </div>
           <label className="mb-3 block">

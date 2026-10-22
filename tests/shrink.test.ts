@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Shrinker } from '../src/main/shrink'
 
-const dir = mkdtempSync(join(tmpdir(), 'sonora-shrink-'))
+const dir = mkdtempSync(join(tmpdir(), 'lyria-shrink-'))
 const put = (name: string, body: string): string => {
   const file = join(dir, name)
   writeFileSync(file, body)

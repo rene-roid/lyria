@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="resources/icon.png" width="96" alt="Sonora" />
+<img src="resources/icon.png" width="96" alt="Lyria" />
 
-# Sonora
+# Lyria
 
 **A Spotify-like desktop client for your own music server.**
 
@@ -54,7 +54,7 @@ track-change toasts, a floating mini-player and a taskbar-area widget with a liv
 <tr>
 <td width="50%">
 
-**Mixes** — your server's mixes plus ones Sonora builds from what you play
+**Mixes** — your server's mixes plus ones Lyria builds from what you play
 <img src="docs/screenshots/mixes.png" alt="Mixes" />
 
 </td>
@@ -106,9 +106,9 @@ track-change toasts, a floating mini-player and a taskbar-area widget with a liv
 ## Features
 
 - 🎵 **Spotify-style Library** — a sidebar with Home, Albums, Soundtracks, Artists, Mixes, Genres and Moods, a *Your Library* panel (playlists, mixes, albums, artists, with a heart filter for saved items) and a top bar with search, all backed by the Subsonic API
-- ✨ **Mixes** — your server's NaviBeat and Explo mixes alongside genre, mood and artist mixes Sonora builds from what you play; keep the ones you like
+- ✨ **Mixes** — your server's NaviBeat and Explo mixes alongside genre, mood and artist mixes Lyria builds from what you play; keep the ones you like
 - 🎨 **Genres & Moods** — cards with artwork and a look of their own, and page headers tinted from the cover art
-- 🖌 **Accent Colour** — pick Blue or Green in Settings; it applies to every Sonora window
+- 🖌 **Accent Colour** — pick Blue or Green in Settings; it applies to every Lyria window
 - 🎤 **Synced Lyrics** — OpenSubsonic structured lyrics with an LRC/SRT/plain fallback, extrapolated between position updates so the highlighted line tracks the audio
 - 🔔 **Fluent Toasts** — a frameless, click-through, always-on-top card that animates in on every track change
 - 🪟 **Mini-player** — draggable always-on-top player that remembers where you put it
@@ -152,7 +152,7 @@ server instead.
 
 The floating widgets are tuned for the Windows 11 taskbar; on Linux they sit at the edge of the
 work area, and the tray needs an AppIndicator/StatusNotifier host (GNOME needs an extension such as
-AppIndicator Support). The Linux tray has no left-click handler, so use its **Show Sonora** entry.
+AppIndicator Support). The Linux tray has no left-click handler, so use its **Show Lyria** entry.
 
 ## Development
 
@@ -164,7 +164,7 @@ bun run typecheck
 bun run build       # production build into out/, run it with `bun run start`
 bun run dist        # installer in release/ (NSIS on Windows, AppImage + deb on Linux)
 bun run dist:dir    # unpacked app folder in release/
-bun run icons       # regenerate resources/icon.png and tray icons
+bun run icons       # regenerate resources/icon.png and tray icons from icon.svg (needs rsvg-convert)
 bun run api:test -- --server URL --user U --pass P   # exercise the API client with no UI
 ```
 
@@ -188,10 +188,10 @@ Releases are cut by a GitHub Actions workflow: **[docs/RELEASING.md](docs/RELEAS
 ## Project Structure
 
 ```
-sonora/
+lyria/
 ├── src/
 │   ├── main/            # Electron main: windows, tray, IPC relay, store, credentials
-│   ├── preload/         # window.sonora bridge
+│   ├── preload/         # window.lyria bridge
 │   ├── shared/          # Types, Subsonic client, lyrics parser, formatters
 │   └── renderer/
 │       ├── main/        # Library UI (views/, components/)

@@ -19,7 +19,7 @@ export function rebuildTrayMenu(): void {
     { label: 'Next', click: () => sendCommand('next'), enabled: Boolean(track) },
     { label: 'Previous', click: () => sendCommand('prev'), enabled: Boolean(track) },
     { type: 'separator' },
-    { label: 'Show Sonora', click: () => showMainWindow() },
+    { label: 'Show Lyria', click: () => showMainWindow() },
     {
       label: 'Mini player',
       type: 'checkbox',
@@ -40,14 +40,14 @@ export function rebuildTrayMenu(): void {
     },
     { type: 'separator' },
     {
-      label: 'Quit Sonora',
+      label: 'Quit Lyria',
       click: () => {
         app.quit()
       }
     }
   ])
   tray.setContextMenu(menu)
-  tray.setToolTip(track ? `Sonora · ${track.title} · ${track.artist}` : 'Sonora')
+  tray.setToolTip(track ? `Lyria · ${track.title} · ${track.artist}` : 'Lyria')
 }
 
 export function createTray(): Tray {

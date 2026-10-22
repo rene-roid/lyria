@@ -114,7 +114,7 @@ export function oggOpus({ packets, channels, preSkip, inputRate, totalSamples }:
   const serial = (Math.random() * 0xffffffff) >>> 0
   const pages: Uint8Array[] = [
     page([opusHead(channels, preSkip, inputRate)], BOS, 0, serial, 0),
-    page([opusTags('Sonora')], 0, 0, serial, 1)
+    page([opusTags('Lyria')], 0, 0, serial, 1)
   ]
   const end = preSkip + totalSamples
   let granule = 0

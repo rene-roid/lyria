@@ -19,7 +19,7 @@ let initialised = false
 export function initPlayerBridge(): void {
   if (initialised) return
   initialised = true
-  const { player } = window.sonora
+  const { player } = window.lyria
   const set = usePlayerStore.setState
 
   void player.getState().then((s) => set({ ...s }))
@@ -42,7 +42,7 @@ export function usePlayerState<T>(selector?: (s: PlayerState) => T): T | PlayerS
 }
 
 function send<K extends PlayerCommandName>(cmd: K, payload?: PlayerCommands[K]): void {
-  window.sonora.player.command(cmd, payload)
+  window.lyria.player.command(cmd, payload)
 }
 
 /** Command helpers. Every widget shares these; none of them touch audio directly. */

@@ -1,4 +1,4 @@
-/** Subsonic / OpenSubsonic API response shapes (subset used by Sonora). */
+/** Subsonic / OpenSubsonic API response shapes (subset used by Lyria). */
 
 export interface SubsonicEnvelope<T = Record<string, unknown>> {
   'subsonic-response': {

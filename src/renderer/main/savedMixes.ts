@@ -22,13 +22,13 @@ export const findSavedMix = (id: string): SavedMix | undefined => list().find((m
 export const savedMixes = {
   save(seed: MixSeed, title: string, tracks: Track[]): SavedMix {
     const mix: SavedMix = { id: savedMixId(seed), title, seed, savedAt: Date.now(), tracks }
-    void window.sonora.settings.update({ savedMixes: saveMix(list(), mix) })
+    void window.lyria.settings.update({ savedMixes: saveMix(list(), mix) })
     return mix
   },
   /** Also drops its download: a mix no longer kept has nothing to play its songs from. */
   remove(id: string): void {
-    void window.sonora.settings.update({ savedMixes: list().filter((m) => m.id !== id) })
-    void window.sonora.downloads.remove(downloadKey('mix', id))
+    void window.lyria.settings.update({ savedMixes: list().filter((m) => m.id !== id) })
+    void window.lyria.downloads.remove(downloadKey('mix', id))
   }
 }
 

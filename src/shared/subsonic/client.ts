@@ -26,7 +26,7 @@ import type {
 } from './types'
 
 export const API_VERSION = '1.16.1'
-export const CLIENT_NAME = 'sonora'
+export const CLIENT_NAME = 'lyria'
 
 export class SubsonicError extends Error {
   constructor(

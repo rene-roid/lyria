@@ -1,3 +1,4 @@
+import { migrated } from './migrate'
 import { app, BrowserWindow, globalShortcut, nativeTheme, screen, session } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import * as artCache from './artCache'
@@ -10,6 +11,7 @@ import * as scrobbles from './scrobbles'
 import { flushSettings, getSettings, onSettingsChange, updateSettings } from './store'
 import { sanitizeResume } from '@shared/types'
 import { loadSession } from './credentials'
+import { setAutoLaunch } from './autolaunch'
 import { createTray, rebuildTrayMenu } from './tray'
 import {
   createHostWindow,
@@ -24,7 +26,7 @@ import {
 
 let quitting = false
 
-// Has to happen before the app is ready, so every window can load `sonora-art://` cover images.
+// Has to happen before the app is ready, so every window can load `lyria-art://` cover images.
 artCache.registerArtScheme()
 
 /** How long after launch the caches start re-encoding what is already on disk, clear of start-up. */
@@ -33,7 +35,7 @@ const SWEEP_DELAY_MS = 30_000
 /** How often downloaded playlists are checked against the server for songs added or removed. */
 const DOWNLOAD_SYNC_MS = 30 * 60_000
 
-// Only one Sonora at a time; a second launch focuses the existing main window.
+// Only one Lyria at a time; a second launch focuses the existing main window.
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -76,8 +78,10 @@ function registerMediaKeys(enabled: boolean): void {
 }
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('dev.sonora.app')
-  // Sonora is dark-only, and the system-drawn surfaces follow this: without it Windows hands the
+  electronApp.setAppUserModelId('dev.lyria.app')
+  // The login item still points at the old Sonora install; register this one instead.
+  if (migrated && getSettings().autoLaunch) setAutoLaunch(true)
+  // Lyria is dark-only, and the system-drawn surfaces follow this: without it Windows hands the
   // widget's acrylic backdrop the light tint, which its dark text is unreadable on.
   nativeTheme.themeSource = 'dark'
 

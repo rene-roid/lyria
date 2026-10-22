@@ -10,8 +10,8 @@ mock.module('electron', () => ({ app: { isPackaged: true, setLoginItemSettings: 
 const { setAutoLaunch } = await import('../src/main/autolaunch')
 
 test('linux autostart entry is written then removed', () => {
-  process.env.XDG_CONFIG_HOME = mkdtempSync(join(tmpdir(), 'sonora-'))
-  const file = join(process.env.XDG_CONFIG_HOME, 'autostart', 'sonora.desktop')
+  process.env.XDG_CONFIG_HOME = mkdtempSync(join(tmpdir(), 'lyria-'))
+  const file = join(process.env.XDG_CONFIG_HOME, 'autostart', 'lyria.desktop')
   setAutoLaunch(true)
   expect(readFileSync(file, 'utf8')).toContain(`Exec="${process.execPath}" --hidden`)
   setAutoLaunch(false)

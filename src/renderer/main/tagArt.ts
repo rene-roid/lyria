@@ -5,7 +5,7 @@
  * music actually inside it. The pick is deterministic from the tag and a rotation period, so a
  * card holds still for hours and then quietly turns over; it is written to the local cache as
  * well, which is what lets Home's shelf draw a mood tile without loading the moods page first.
- * The images themselves are kept on disk by the main process behind `sonora-art://`.
+ * The images themselves are kept on disk by the main process behind `lyria-art://`.
  */
 import { useEffect, useSyncExternalStore } from 'react'
 import type { SubsonicClient } from '@shared/subsonic/client'

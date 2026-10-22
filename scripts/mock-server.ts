@@ -1,5 +1,5 @@
 /**
- * Minimal OpenSubsonic-compatible mock server for developing Sonora without a Navidrome instance.
+ * Minimal OpenSubsonic-compatible mock server for developing Lyria without a Navidrome instance.
  * Serves a tiny synthetic library with generated WAV audio, cover art and synced lyrics.
  *
  *   bun run scripts/mock-server.ts [--port 4599]
@@ -164,7 +164,7 @@ function lyricsFor(song: (typeof songs)[number]) {
 // ---- server ----------------------------------------------------------------------------------
 
 const ok = (body: Record<string, unknown> = {}) =>
-  Response.json({ 'subsonic-response': { status: 'ok', version: '1.16.1', type: 'sonora-mock', serverVersion: '0.1', openSubsonic: true, ...body } })
+  Response.json({ 'subsonic-response': { status: 'ok', version: '1.16.1', type: 'lyria-mock', serverVersion: '0.1', openSubsonic: true, ...body } })
 const fail = (code: number, message: string) =>
   Response.json({ 'subsonic-response': { status: 'failed', version: '1.16.1', error: { code, message } } })
 const song = (id: string) => songs.find((s) => s.id === id)
@@ -301,4 +301,4 @@ Bun.serve({
   }
 })
 
-console.log(`Sonora mock Subsonic server on http://localhost:${PORT}  (any user/password; user "bad" fails auth)`)
+console.log(`Lyria mock Subsonic server on http://localhost:${PORT}  (any user/password; user "bad" fails auth)`)

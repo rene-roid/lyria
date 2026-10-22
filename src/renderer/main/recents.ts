@@ -28,7 +28,7 @@ function songItem(t: Track | undefined): RecentItem | null {
 function remember(item: RecentItem | null): void {
   const { recents } = useSessionStore.getState().settings
   const next = pushRecent(recents, item)
-  if (next !== recents) void window.sonora.settings.update({ recents: next })
+  if (next !== recents) void window.lyria.settings.update({ recents: next })
 }
 
 /**

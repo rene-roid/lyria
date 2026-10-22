@@ -1,10 +1,10 @@
 {
-  "name": "sonora",
-  "productName": "Sonora",
+  "name": "lyria",
+  "productName": "Lyria",
   "version": "0.5.0",
   "description": "A Spotify-like desktop client for Navidrome with synced lyrics, Fluent toasts, a mini-player and a taskbar-area visualizer widget.",
   "main": "./out/main/index.js",
-  "author": "Sonora",
+  "author": "Lyria",
   "license": "MIT",
   "private": true,
   "scripts": {
@@ -18,9 +18,9 @@
     "mock": "bun run scripts/mock-server.ts",
     "smoke": "bun run scripts/smoke.ts",
     "test": "bun test",
-    "icons": "bun run scripts/gen-icons.ts",
-    "dist": "bun run icons && electron-vite build && electron-builder --config electron-builder.yml",
-    "dist:dir": "bun run icons && electron-vite build && electron-builder --dir --config electron-builder.yml"
+    "icons": "rsvg-convert -w 512 resources/icon.svg -o resources/icon.png && rsvg-convert -w 32 resources/icon.svg -o resources/tray.png && rsvg-convert -w 64 resources/icon.svg -o resources/tray@2x.png",
+    "dist": "electron-vite build && electron-builder --config electron-builder.yml",
+    "dist:dir": "electron-vite build && electron-builder --dir --config electron-builder.yml"
   },
   "trustedDependencies": [
     "electron",

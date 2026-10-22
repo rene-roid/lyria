@@ -175,7 +175,7 @@ function formatBytes(n: number): string {
 }
 
 /**
- * Alternate URLs for the same library (LAN, VPN, public). Sonora pings them all and uses
+ * Alternate URLs for the same library (LAN, VPN, public). Lyria pings them all and uses
  * whichever answers first, switching automatically when the one in use stops responding.
  */
 function Connections({ session }: { session: Session }) {
@@ -187,7 +187,7 @@ function Connections({ session }: { session: Session }) {
   const test = useCallback(async (): Promise<void> => {
     setBusy(true)
     try {
-      setProbes(await window.sonora.auth.probe())
+      setProbes(await window.lyria.auth.probe())
     } finally {
       setBusy(false)
     }
@@ -198,7 +198,7 @@ function Connections({ session }: { session: Session }) {
   }, [test, session.servers?.join(',')])
 
   const save = async (next: string[]): Promise<void> => {
-    await window.sonora.auth.setServers(next)
+    await window.lyria.auth.setServers(next)
     void test()
   }
 
@@ -209,14 +209,14 @@ function Connections({ session }: { session: Session }) {
         action={
           <div className="flex items-center gap-2">
             {busy && <Spinner className="h-4 w-4" />}
-            <GhostButton onClick={() => void window.sonora.auth.reselect().then(test)} disabled={busy}>
+            <GhostButton onClick={() => void window.lyria.auth.reselect().then(test)} disabled={busy}>
               Use fastest
             </GhostButton>
           </div>
         }
       />
       <p className="mb-3 px-3 text-xs text-ink-3">
-        Several addresses for the same server. The fastest one that answers is used, and Sonora switches over on its
+        Several addresses for the same server. The fastest one that answers is used, and Lyria switches over on its
         own when it stops responding.
       </p>
       <ul className="mb-3">
@@ -238,7 +238,7 @@ function Connections({ session }: { session: Session }) {
               ) : (
                 <button
                   className="shrink-0 text-xs text-ink-2 hover:text-ink"
-                  onClick={() => void window.sonora.auth.selectServer(s)}
+                  onClick={() => void window.lyria.auth.selectServer(s)}
                 >
                   Use
                 </button>
@@ -352,7 +352,7 @@ function AnchorPicker({ value, onChange }: { value: OverlayAnchor; onChange: (v:
 /** Card fill: an opaque panel, or the system's frosted glass. */
 function BackgroundPicker({ value, onChange }: { value: OverlayBackground; onChange: (v: OverlayBackground) => void }) {
   const chosen = OVERLAY_BACKGROUNDS.find((b) => b.value === value)
-  const degraded = value === 'acrylic' && !window.sonora.nativeAcrylic
+  const degraded = value === 'acrylic' && !window.lyria.nativeAcrylic
   return (
     <div className="flex items-center justify-between gap-6 rounded-md px-3 py-3">
       <div>
@@ -427,7 +427,7 @@ function TaskbarWidgetSettings({ value, onChange }: { value: WidgetOptions; onCh
       />
       <Toggle
         label="Album art"
-        description="Cover thumbnail on the left; click it to open Sonora"
+        description="Cover thumbnail on the left; click it to open Lyria"
         checked={value.cover}
         onChange={(cover) => onChange({ cover })}
       />
@@ -557,7 +557,7 @@ function ThemePicker({ value, onChange }: { value: ThemeName; onChange: (v: Them
     <div className="flex items-center justify-between gap-6 rounded-md px-3 py-3">
       <div>
         <div className="text-sm font-medium">Accent colour</div>
-        <div className="text-xs text-ink-2">Buttons, sliders and highlights in every Sonora window</div>
+        <div className="text-xs text-ink-2">Buttons, sliders and highlights in every Lyria window</div>
       </div>
       <div className="flex shrink-0 rounded-md border border-white/10 p-0.5">
         {THEMES.map((t) => (
@@ -619,7 +619,7 @@ function NormalizeSetting({ value, onChange }: { value: NormalizeMode; onChange:
   )
 }
 
-const downloadStats = (): Promise<CacheStats> => window.sonora.downloads.stats()
+const downloadStats = (): Promise<CacheStats> => window.lyria.downloads.stats()
 
 /** Everything kept for offline listening, how far each has got, and a way to let it go. */
 function DownloadsSection() {
@@ -640,7 +640,7 @@ function DownloadsSection() {
       />
       <p className="mb-3 px-3 text-xs text-ink-3">
         Playlists and mixes you download play with no connection at all, and are not counted against the song cache.
-        Downloaded playlists pick up songs added on the server the next time Sonora can reach it. Plays made offline
+        Downloaded playlists pick up songs added on the server the next time Lyria can reach it. Plays made offline
         are sent to the server once it answers again, so its play counts stay right.
       </p>
       <div className="px-3 pb-2 text-xs text-ink-2">
@@ -683,9 +683,9 @@ function DownloadsSection() {
   )
 }
 
-const songStats = (): Promise<CacheStats> => window.sonora.cache.stats()
-const artStats = (): Promise<CacheStats> => window.sonora.art.stats()
-const metaStats = (): Promise<CacheStats> => window.sonora.meta.stats()
+const songStats = (): Promise<CacheStats> => window.lyria.cache.stats()
+const artStats = (): Promise<CacheStats> => window.lyria.art.stats()
+const metaStats = (): Promise<CacheStats> => window.lyria.meta.stats()
 
 /** How a bitrate sounds next to the lossless original, for the line under the slider. */
 function opusQuality(kbps: number): string {
@@ -710,7 +710,7 @@ function SongCache({
     <section className="mb-8">
       <SectionHeader
         title="Song cache"
-        action={<GhostButton onClick={() => void window.sonora.cache.clear()}>Clear cache</GhostButton>}
+        action={<GhostButton onClick={() => void window.lyria.cache.clear()}>Clear cache</GhostButton>}
       />
       <p className="mb-3 px-3 text-xs text-ink-3">
         Songs you play are kept on disk and reused next time. Playback starts streaming straight away and moves over
@@ -767,7 +767,7 @@ function ImageCache({ maxMb, onChange }: { maxMb: number; onChange: (v: number) 
     <section className="mb-8">
       <SectionHeader
         title="Image cache"
-        action={<GhostButton onClick={() => void window.sonora.art.clear()}>Clear cache</GhostButton>}
+        action={<GhostButton onClick={() => void window.lyria.art.clear()}>Clear cache</GhostButton>}
       />
       <p className="mb-3 px-3 text-xs text-ink-3">
         Cover art is downloaded once and kept on disk, compressed to WebP, so pages you have already seen paint
@@ -806,7 +806,7 @@ function LibraryCache() {
       />
       <p className="mb-3 px-3 text-xs text-ink-3">
         Album lists, artists, playlists and the pages you open are kept on disk, compressed, so they show up instantly
-        with what was there last time while Sonora checks the server for anything new.
+        with what was there last time while Lyria checks the server for anything new.
       </p>
       <div className="px-3 py-3">
         <div className="text-sm font-medium">On disk</div>
@@ -823,11 +823,11 @@ export function SettingsView() {
   const session = useSessionStore((s) => s.session)
   const [info, setInfo] = useState<{ version: string; platform: string }>()
   useEffect(() => {
-    void window.sonora.app.info().then(setInfo)
+    void window.lyria.app.info().then(setInfo)
   }, [])
 
   const update = (patch: SettingsPatch): void => {
-    void window.sonora.settings.update(patch)
+    void window.lyria.settings.update(patch)
   }
   const widget = (key: keyof Settings['widgets'], value: boolean): void =>
     update({ widgets: { ...settings.widgets, [key]: value } })
@@ -904,7 +904,7 @@ export function SettingsView() {
         <SectionHeader title="Behaviour" />
         <Toggle
           label="Close to tray"
-          description="Closing the main window keeps Sonora playing in the system tray"
+          description="Closing the main window keeps Lyria playing in the system tray"
           checked={settings.closeToTray}
           onChange={(v) => update({ closeToTray: v })}
         />
@@ -916,7 +916,7 @@ export function SettingsView() {
         />
         <Toggle
           label="Start on system startup"
-          description="Launch Sonora minimised to the tray when you sign in"
+          description="Launch Lyria minimised to the tray when you sign in"
           checked={settings.autoLaunch}
           onChange={(v) => update({ autoLaunch: v })}
         />
@@ -927,13 +927,13 @@ export function SettingsView() {
       <section className="mb-8">
         <SectionHeader title="Account" />
         <div className="flex items-center gap-3 px-3">
-          <GhostButton onClick={() => void window.sonora.auth.logout()}>Sign out</GhostButton>
+          <GhostButton onClick={() => void window.lyria.auth.logout()}>Sign out</GhostButton>
           <span className="text-xs text-ink-3">Removes the stored token from the Windows credential store.</span>
         </div>
       </section>
 
       <div className="px-3 text-xs text-ink-3">
-        Sonora {info?.version ?? ''} · {info?.platform ?? ''}
+        Lyria {info?.version ?? ''} · {info?.platform ?? ''}
       </div>
     </div>
   )
