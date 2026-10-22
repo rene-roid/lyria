@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { release } from 'node:os'
 import { supportsNativeAcrylic } from '@shared/types'
 import type {
+  HostJob,
   PlayerCommandName,
   PlayerCommands,
   PlayerEventName,
@@ -61,6 +62,16 @@ const api = {
     },
     onFramesWanted(cb: (wanted: boolean) => void): Unsubscribe {
       return subscribe('host:framesWanted', cb)
+    },
+    /** Re-encoding for the disk caches; whatever `run` resolves with goes back to main. */
+    onJob(run: (job: HostJob, body: Uint8Array) => Promise<Uint8Array | null>): Unsubscribe {
+      const handler = (_e: IpcRendererEvent, id: number, job: HostJob, body: Uint8Array): void => {
+        void run(job, body)
+          .catch(() => null)
+          .then((result) => ipcRenderer.send('host:jobDone', id, result))
+      }
+      ipcRenderer.on('host:job', handler)
+      return () => ipcRenderer.removeListener('host:job', handler)
     }
   },
 
@@ -114,6 +125,27 @@ const api = {
     },
     clear(): Promise<void> {
       return ipcRenderer.invoke('cache:clear')
+    }
+  },
+
+  /** Library responses kept on disk so views paint before the server answers. See renderer/shared/cache. */
+  meta: {
+    load(): Promise<{ scope: string; entries: [string, string][] }> {
+      return ipcRenderer.invoke('meta:load')
+    },
+    /** Who the entries belong to; a different account wipes them. */
+    setScope(scope: string): void {
+      ipcRenderer.send('meta:setScope', scope)
+    },
+    /** A null value drops the entry. */
+    put(key: string, value: string | null): void {
+      ipcRenderer.send('meta:put', key, value)
+    },
+    stats(): Promise<{ bytes: number; count: number }> {
+      return ipcRenderer.invoke('meta:stats')
+    },
+    clear(): Promise<void> {
+      return ipcRenderer.invoke('meta:clear')
     }
   },
 

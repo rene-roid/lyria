@@ -20,6 +20,7 @@ import {
 } from '@shared/subsonic/client'
 import * as artCache from './artCache'
 import * as audioCache from './audioCache'
+import * as metaCache from './metaCache'
 import { setAutoLaunch } from './autolaunch'
 import { clearSession, loadSession, saveSession } from './credentials'
 import { getSettings, updateSettings } from './store'
@@ -245,6 +246,10 @@ export function setupIpc(): void {
     // A smaller budget has to take effect now, not at the next download.
     if (patch.cacheMaxGb !== undefined && patch.cacheMaxGb < before.cacheMaxGb) void audioCache.evict()
     if (patch.artCacheMaxMb !== undefined && patch.artCacheMaxMb < before.artCacheMaxMb) void artCache.evict()
+    // Turned on, or a new bitrate: work through what is already on disk too.
+    if (next.cacheCompress && (!before.cacheCompress || next.cacheCompressKbps !== before.cacheCompressKbps)) {
+      void audioCache.compressAll()
+    }
     broadcast('settings:changed', [next])
     return next
   })
@@ -265,6 +270,15 @@ export function setupIpc(): void {
   // ---- cover art cache -----------------------------------------------------
   ipcMain.handle('art:stats', () => artCache.stats())
   ipcMain.handle('art:clear', () => artCache.clear())
+
+  // ---- library metadata cache ----------------------------------------------
+  ipcMain.handle('meta:load', () => metaCache.all())
+  ipcMain.on('meta:setScope', (_e, scope: string) => void metaCache.setScope(String(scope)))
+  ipcMain.on('meta:put', (_e, key: string, value: string | null) => {
+    if (typeof key === 'string' && (value === null || typeof value === 'string')) void metaCache.put(key, value)
+  })
+  ipcMain.handle('meta:stats', () => metaCache.stats())
+  ipcMain.handle('meta:clear', () => metaCache.clear())
 
   // ---- windows -------------------------------------------------------------
   ipcMain.on('window:control', (e, action: 'minimize' | 'maximize' | 'close' | 'hide' | 'showMain' | 'toastShown' | 'toastLeaving' | 'toastDone') => {

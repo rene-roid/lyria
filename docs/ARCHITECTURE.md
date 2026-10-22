@@ -44,6 +44,21 @@ Windows, libsecret on Linux; without a keyring the derived token is stored unenc
 is logged). The plain password is never persisted. `keytar` was not used because it is archived and
 has no prebuilt binaries for current Electron versions.
 
+## Caches
+
+Three on-disk caches live under the user data folder, each with a size and a clear button in Settings:
+
+- **Songs** (`src/main/audioCache.ts`): played tracks, evicted least recently played first. With
+  compression on, FLAC and WAV files are re-encoded to Ogg Opus after they land and the original is
+  swapped for the smaller file. Main has no codecs, so it hands the bytes to the audio host
+  (`src/main/hostJobs.ts` → `src/renderer/host/compress.ts`), which decodes them with Web Audio,
+  encodes with WebCodecs `AudioEncoder` and wraps the packets with `src/shared/oggOpus.ts`. Jobs run
+  one at a time; songs cached before compression was on are swept in the background after launch.
+- **Cover art** (`src/main/artCache.ts`): served over `sonora-art://`, re-encoded to WebP the same way.
+- **Library responses** (`src/main/metaCache.ts`): album lists, artists, playlists and pages, held in
+  memory and written as one gzipped JSON file. The main window loads it all before its first render,
+  so `cacheRead` stays synchronous, and wipes it when the account changes.
+
 ## CORS and the visualiser
 
 `AnalyserNode` needs the stream response to be CORS-readable. Navidrome already sends
