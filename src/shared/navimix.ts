@@ -1,6 +1,6 @@
 /**
  * Playlists the server's mix plugins write: NaviBeat's (tagged with an `nb1:` comment) and Explo's.
- * Parsed the way the server's Spotify-style web UI and navidroid parse them, so Sonora shows the
+ * Parsed the way the server's Spotify-style web UI and navidroid parse them, so Lyria shows the
  * same titles, colours and sections. A port of navidroid's Mixes.kt; keep the two in step.
  */
 import type { Playlist } from './subsonic/types'

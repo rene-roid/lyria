@@ -21,7 +21,7 @@ interface Schema {
 }
 
 export const store = new Store<Schema>({
-  name: 'sonora',
+  name: 'lyria',
   defaults: { settings: defaultSettings }
 })
 

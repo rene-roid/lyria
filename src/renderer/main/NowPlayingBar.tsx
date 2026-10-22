@@ -118,7 +118,7 @@ export function NowPlayingBar() {
         </Toggle>
         <Toggle
           on={settings.widgets.mini}
-          onClick={() => void window.sonora.settings.update({ widgets: { ...settings.widgets, mini: !settings.widgets.mini } })}
+          onClick={() => void window.lyria.settings.update({ widgets: { ...settings.widgets, mini: !settings.widgets.mini } })}
           title="Mini player"
         >
           <PictureInPicture2 size={16} />

@@ -55,7 +55,7 @@ export function parseSrt(text: string): Lyrics {
   return { synced: lines.length > 0, lines: lines.sort((a, b) => a.time - b.time) }
 }
 
-/** Convert OpenSubsonic structured lyrics into Sonora's Lyrics shape. Prefers a synced entry. */
+/** Convert OpenSubsonic structured lyrics into Lyria's Lyrics shape. Prefers a synced entry. */
 export function fromStructuredLyrics(list: StructuredLyrics[]): Lyrics | null {
   if (!list.length) return null
   const pick = list.find((l) => l.synced) ?? list[0]

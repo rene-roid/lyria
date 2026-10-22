@@ -334,7 +334,7 @@ function Library() {
                 </div>
               )
             })}
-            {kept.length > 0 && <Group title="Kept from Sonora" />}
+            {kept.length > 0 && <Group title="Kept from Lyria" />}
             {kept.map((m) => (
               <LibraryRow
                 key={m.id}
@@ -345,7 +345,7 @@ function Library() {
                   </Thumb>
                 }
                 title={m.title}
-                subtitle="Mix • Sonora"
+                subtitle="Mix • Lyria"
                 saved
               />
             ))}
@@ -396,7 +396,7 @@ function Library() {
 }
 
 /** The menu's height as last dragged; absent means it fits its links. */
-const NAV_HEIGHT = 'sonora.navHeight'
+const NAV_HEIGHT = 'lyria.navHeight'
 /** Shortest the menu may be dragged to: one link and its padding. */
 const NAV_MIN = 56
 /** A step of the arrow keys on the handle. */

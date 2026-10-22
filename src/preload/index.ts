@@ -19,7 +19,7 @@ import type {
 import type { ServerProbe } from '@shared/subsonic/client'
 
 const windowName = ((): WindowName => {
-  const arg = process.argv.find((a) => a.startsWith('--sonora-window='))
+  const arg = process.argv.find((a) => a.startsWith('--lyria-window='))
   return (arg?.split('=')[1] as WindowName) ?? 'main'
 })()
 
@@ -178,7 +178,7 @@ const api = {
     }
   },
 
-  /** On-disk cover art cache, for the settings panel. The images themselves go over `sonora-art://`. */
+  /** On-disk cover art cache, for the settings panel. The images themselves go over `lyria-art://`. */
   art: {
     stats(): Promise<{ bytes: number; count: number }> {
       return ipcRenderer.invoke('art:stats')
@@ -228,6 +228,6 @@ const api = {
   }
 }
 
-export type SonoraApi = typeof api
+export type LyriaApi = typeof api
 
-contextBridge.exposeInMainWorld('sonora', api)
+contextBridge.exposeInMainWorld('lyria', api)

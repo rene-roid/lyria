@@ -1,5 +1,5 @@
 /**
- * Artwork for the things the server has none of its own for. Sonora's mixes are drawn like the
+ * Artwork for the things the server has none of its own for. Lyria's mixes are drawn like the
  * server's NaviBeat ones, a cover under a colour band (see MixCover); a genre or mood gets a
  * poster, one of its covers edited into the tag's own look (see tagLook). Which covers each one
  * wears is `tagArt`'s business, not this file's.

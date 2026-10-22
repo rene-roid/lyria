@@ -16,7 +16,7 @@ window is a pure display layer:
 
 - `src/shared/types.ts` holds the full event/command contract (`PlayerEvents`, `PlayerCommands`, `PlayerState`)
 - `src/main/ipc.ts` relays host events to every window, caches the latest state so new windows hydrate instantly, forwards commands to the host, and streams `audioFrame` only to windows that asked for it
-- `src/preload/index.ts` exposes `window.sonora` (`player.on/command/getState/wantFrames`, `auth`, `settings`, `window`, `toast`)
+- `src/preload/index.ts` exposes `window.lyria` (`player.on/command/getState/wantFrames`, `auth`, `settings`, `window`, `toast`)
 - `src/renderer/shared/playerStore.ts` exports `usePlayerState()` (Zustand) and the `player.*` command helpers used by every window
 
 ## Windows
@@ -30,7 +30,7 @@ window is a pure display layer:
 | `widget` | "Taskbar" widget: acrylic flyout pinned to the bottom-right of the work area, right above the taskbar, with a canvas visualiser fed by `audioFrame` at ~30fps |
 
 On Linux the tray icon has no left-click handler (most desktops only open the context menu), so use
-the menu's **Show Sonora** entry.
+the menu's **Show Lyria** entry.
 
 Windows does not allow third-party apps to inject controls into the taskbar itself; the widget is a
 small always-on-top window positioned next to the system tray, which is the same approach
@@ -54,7 +54,7 @@ Three on-disk caches live under the user data folder, each with a size and a cle
   (`src/main/hostJobs.ts` → `src/renderer/host/compress.ts`), which decodes them with Web Audio,
   encodes with WebCodecs `AudioEncoder` and wraps the packets with `src/shared/oggOpus.ts`. Jobs run
   one at a time; songs cached before compression was on are swept in the background after launch.
-- **Cover art** (`src/main/artCache.ts`): served over `sonora-art://`, re-encoded to WebP the same way.
+- **Cover art** (`src/main/artCache.ts`): served over `lyria-art://`, re-encoded to WebP the same way.
 - **Library responses** (`src/main/metaCache.ts`): album lists, artists, playlists and pages, held in
   memory and written as one gzipped JSON file. The main window loads it all before its first render,
   so `cacheRead` stays synchronous, and wipes it when the account changes.

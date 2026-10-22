@@ -1,5 +1,5 @@
 /**
- * One command to get Sonora running: mock server + electron-vite dev.
+ * One command to get Lyria running: mock server + electron-vite dev.
  *
  *   bun run go            # mock server on :4599 + dev app
  *   bun run go --no-mock  # dev app only (you have a real Navidrome)

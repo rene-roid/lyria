@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const userData = mkdtempSync(join(tmpdir(), 'sonora-cache-'))
+const userData = mkdtempSync(join(tmpdir(), 'lyria-cache-'))
 let maxGb = 1 / 1024 // a 1 MB budget
 
 // Bun shares one 'electron' mock across test files and can only re-point the names it was first

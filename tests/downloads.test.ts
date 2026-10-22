@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const userData = mkdtempSync(join(tmpdir(), 'sonora-downloads-'))
+const userData = mkdtempSync(join(tmpdir(), 'lyria-downloads-'))
 const session = { server: 'http://server', username: 'u', token: 't', salt: 's' }
 
 // Same export names as the other tests' electron mocks; see audioCache.test.

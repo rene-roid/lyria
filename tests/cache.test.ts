@@ -16,7 +16,7 @@ const legacy = new Map<string, string>()
 let disk: { scope: string; entries: [string, string][] } = { scope: '', entries: [] }
 const sent: unknown[][] = []
 ;(globalThis as { window?: unknown }).window = {
-  sonora: {
+  lyria: {
     meta: {
       load: async () => disk,
       setScope: (scope: string) => void sent.push(['scope', scope]),

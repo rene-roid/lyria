@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const userData = mkdtempSync(join(tmpdir(), 'sonora-art-'))
+const userData = mkdtempSync(join(tmpdir(), 'lyria-art-'))
 const session = { server: 'http://server', username: 'u', token: 't', salt: 's' }
 let reply: () => Response = () => new Response(null, { status: 500 })
 let handler: (req: Request) => Promise<Response> = async () => new Response(null)
@@ -20,7 +20,7 @@ mock.module('../src/main/credentials', () => ({ loadSession: () => session }))
 const { registerArtProtocol } = await import('../src/main/artCache')
 registerArtProtocol()
 
-const ask = (id: string) => handler(new Request(`sonora-art://art/?id=${id}`))
+const ask = (id: string) => handler(new Request(`lyria-art://art/?id=${id}`))
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0])
 const notFound = () =>
   new Response('{"subsonic-response":{"status":"failed","error":{"code":70,"message":"Artwork not found"}}}')

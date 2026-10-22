@@ -42,8 +42,8 @@ function MixCard({ seed }: { seed: MixSeed }) {
   )
 }
 
-/** Sonora's own mixes are built here, on this machine, and never written to the server as playlists. */
-const LOCAL_TITLE = 'Mixed by Sonora'
+/** Lyria's own mixes are built here, on this machine, and never written to the server as playlists. */
+const LOCAL_TITLE = 'Mixed by Lyria'
 
 /** The day's mixes: one shelf on Home, the full grid on the Mixes page. Nothing until there is play history to seed from. */
 export function MixRow({ shelf = false }: { shelf?: boolean }) {
@@ -68,7 +68,7 @@ function SavedMixRow({ mixes }: { mixes: SavedMix[] }) {
       <SectionHeader title="My saved mixes" />
       {mixes.length === 0 ? (
         <Empty>
-          Nothing saved yet. Open one of the mixes Sonora built and hit <span className="text-ink-2">Save mix</span> to keep its lineup
+          Nothing saved yet. Open one of the mixes Lyria built and hit <span className="text-ink-2">Save mix</span> to keep its lineup
           before tomorrow rolls a new one.
         </Empty>
       ) : (
@@ -97,7 +97,7 @@ export function MixesView() {
     <div>
       <PageTitle
         title="Mixes"
-        subtitle="Your server's NaviBeat and Explo mixes, the ones Sonora builds from what you play, and the ones you kept."
+        subtitle="Your server's NaviBeat and Explo mixes, the ones Lyria builds from what you play, and the ones you kept."
       />
       {MIX_SECTIONS.map(({ key, title }) => {
         const items = mixes.filter((m) => m.mix.section === key)

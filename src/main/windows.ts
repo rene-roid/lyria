@@ -99,14 +99,14 @@ function baseOptions(name: WindowName): BrowserWindowConstructorOptions {
       contextIsolation: true,
       nodeIntegration: false,
       backgroundThrottling: false,
-      additionalArguments: [`--sonora-window=${name}`]
+      additionalArguments: [`--lyria-window=${name}`]
     }
   }
 }
 
 /** In development, mirror renderer console warnings/errors to the terminal with the window name. */
 function forwardConsole(name: WindowName, win: BrowserWindow): void {
-  if (!is.dev && !process.env["SONORA_DEBUG"]) return
+  if (!is.dev && !process.env["LYRIA_DEBUG"]) return
   win.webContents.on("console-message", (_e, level, message, line, sourceId) => {
     if (level < 2) return
     const src = sourceId ? ` (${sourceId.split("/").pop()}:${line})` : ""
@@ -176,7 +176,7 @@ export function createMainWindow(): BrowserWindow {
     y: saved?.y,
     minWidth: 900,
     minHeight: 600,
-    title: 'Sonora',
+    title: 'Lyria',
     backgroundColor: '#000000',
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',

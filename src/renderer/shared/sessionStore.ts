@@ -32,22 +32,22 @@ export function initSessionBridge(): void {
       loaded: true,
       session,
       // A failover inside the client is reported back so main persists the new active server.
-      client: session ? new SubsonicClient(session, undefined, (s) => void window.sonora.auth.selectServer(s)) : null
+      client: session ? new SubsonicClient(session, undefined, (s) => void window.lyria.auth.selectServer(s)) : null
     })
   }
 
-  void window.sonora.auth.getSession().then((session) => {
+  void window.lyria.auth.getSession().then((session) => {
     apply(session)
     // More than one candidate URL: find the quickest one now rather than on the first failure.
-    if ((session?.servers?.length ?? 0) > 1) void window.sonora.auth.reselect()
+    if ((session?.servers?.length ?? 0) > 1) void window.lyria.auth.reselect()
   })
-  window.sonora.auth.onChange(apply)
+  window.lyria.auth.onChange(apply)
   const applySettings = (settings: Settings): void => {
     document.documentElement.dataset.theme = settings.theme
     set({ settings })
   }
-  void window.sonora.settings.get().then(applySettings)
-  window.sonora.settings.onChange(applySettings)
+  void window.lyria.settings.get().then(applySettings)
+  window.lyria.settings.onChange(applySettings)
 }
 
 export function useClient(): SubsonicClient | null {

@@ -35,15 +35,15 @@ function TaskbarWidget() {
           <button
             className="relative shrink-0 overflow-hidden rounded-md"
             style={{ height: art, width: art }}
-            onClick={() => window.sonora.window.showMain()}
-            title="Open Sonora"
+            onClick={() => window.lyria.window.showMain()}
+            title="Open Lyria"
           >
             <Cover id={track?.coverArt} size={120} className="h-full w-full" />
           </button>
         )}
-        <div className="relative min-w-0 flex-1 cursor-default" onDoubleClick={() => window.sonora.window.showMain()}>
+        <div className="relative min-w-0 flex-1 cursor-default" onDoubleClick={() => window.lyria.window.showMain()}>
           <div className={`text-shadow truncate font-semibold leading-tight ${o.compact ? 'text-[12px]' : 'text-[13px]'}`}>
-            {track?.title ?? 'Sonora'}
+            {track?.title ?? 'Lyria'}
           </div>
           {!o.compact && (
             <div className="text-shadow truncate text-[11.5px] text-ink-2">{track?.artist ?? 'Nothing playing'}</div>

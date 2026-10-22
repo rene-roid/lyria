@@ -94,7 +94,7 @@ export function TitleBar() {
   return (
     <header className="drag grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 bg-surface pl-4 pr-[140px]">
       <div className="flex items-center gap-2">
-        <div className="mr-3 text-[15px] font-extrabold tracking-tight">Sonora</div>
+        <div className="mr-3 text-[15px] font-extrabold tracking-tight">Lyria</div>
         <div className="no-drag flex items-center gap-1">
           <button className="icon-btn h-8 w-8 rounded-full" onClick={nav.back} disabled={cursor === 0} title="Back">
             <ChevronLeft size={22} />

@@ -1,8 +1,8 @@
-import type { SonoraApi } from './index'
+import type { LyriaApi } from './index'
 
 declare global {
   interface Window {
-    sonora: SonoraApi
+    lyria: LyriaApi
   }
 }
 

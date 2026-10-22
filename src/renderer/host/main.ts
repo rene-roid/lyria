@@ -16,7 +16,7 @@ function log(msg: string): void {
   logEl.textContent = lines.join('\n')
 }
 
-const { host, auth, cache, settings } = window.sonora
+const { host, auth, cache, settings } = window.lyria
 
 const engine = new AudioEngine((event, payload) => {
   host.emit(event, payload)

@@ -1,5 +1,5 @@
-appId: dev.sonora.app
-productName: Sonora
+appId: dev.lyria.app
+productName: Lyria
 directories:
   output: release
   buildResources: resources

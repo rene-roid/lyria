@@ -5,7 +5,7 @@ import { headerColor } from '@shared/color'
 import { useClient, useSettings } from './sessionStore'
 
 /**
- * Where a cover is loaded from, best first: Sonora's own copy over `sonora-art://` while the image
+ * Where a cover is loaded from, best first: Lyria's own copy over `lyria-art://` while the image
  * cache has a budget, then the server. The cached path is why a second visit to a page paints
  * instantly -- main keeps the file, so nothing goes over the network again -- and the server stays
  * behind it so a cover main could not download still shows.

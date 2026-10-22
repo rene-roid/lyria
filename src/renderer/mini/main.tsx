@@ -26,7 +26,7 @@ function MiniPlayer() {
         <div className="flex min-w-0 flex-1 flex-col justify-between self-stretch">
           <div className="min-w-0 pr-12">
             <div className="truncate text-[14px] font-semibold leading-tight">{track?.title ?? 'Nothing playing'}</div>
-            <div className="truncate text-[12px] text-ink-2">{track?.artist ?? 'Pick something in Sonora'}</div>
+            <div className="truncate text-[12px] text-ink-2">{track?.artist ?? 'Pick something in Lyria'}</div>
           </div>
           <div className="flex items-center justify-between">
             <TransportControls compact size={16} />
@@ -45,13 +45,13 @@ function MiniPlayer() {
           </div>
         </div>
         <div className="no-drag absolute top-1.5 right-1.5 flex items-center gap-0.5">
-          <button className="icon-btn h-6 w-6" title="Open Sonora" onClick={() => window.sonora.window.showMain()}>
+          <button className="icon-btn h-6 w-6" title="Open Lyria" onClick={() => window.lyria.window.showMain()}>
             <Maximize2 size={12} />
           </button>
           <button
             className="icon-btn h-6 w-6"
             title="Close mini player"
-            onClick={() => void window.sonora.settings.update({ widgets: { mini: false } })}
+            onClick={() => void window.lyria.settings.update({ widgets: { mini: false } })}
           >
             <X size={13} />
           </button>
