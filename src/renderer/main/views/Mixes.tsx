@@ -1,11 +1,13 @@
 import { BookmarkCheck, BookmarkPlus, Trash2 } from 'lucide-react'
-import type { MixKind, SavedMix } from '@shared/types'
+import { downloadKey, type MixKind, type SavedMix } from '@shared/types'
 import { MIX_SECTIONS, paletteColor } from '@shared/navimix'
 import { capitalize } from '@shared/format'
 import { useClient } from '@renderer/shared/sessionStore'
 import { Card, CardGrid, PlaylistCard, Shelf } from '../components/AlbumCard'
 import { TagArt, TagArtCover } from '../components/TagArt'
 import { TrackPage } from '../components/TrackPage'
+import { DownloadButton } from '../components/DownloadButton'
+import { downloads, useDownload } from '../downloads'
 import { Empty, GhostButton, PageTitle, SectionHeader } from '../components/ui'
 import { buildMix, mixSeeds, type MixSeed } from '../mixes'
 import { allAlbums } from '../albumList'
@@ -119,6 +121,7 @@ export function MixView({ value, kind = 'genre' }: { value: string; kind?: MixKi
   const seed: MixSeed = { kind, value }
   const title = mixTitle(seed)
   const saved = useSavedMixes().some((m) => m.id === savedMixId(seed))
+  const download = useDownload(downloadKey('mix', savedMixId(seed)))
   const state = useAsync(
     `mix:${kind}:${value}`,
     () => (client ? buildMix(client, seed, allAlbums) : undefined),
@@ -142,6 +145,15 @@ export function MixView({ value, kind = 'genre' }: { value: string; kind?: MixKi
           {saved ? <BookmarkCheck size={16} /> : <BookmarkPlus size={16} />} {saved ? 'Saved' : 'Save mix'}
         </GhostButton>
       }
+      download={
+        // A mix rolls over every day, so downloading one keeps today's lineup as a saved mix.
+        <DownloadButton
+          status={download}
+          disabled={!state.data?.length}
+          onDownload={() => void downloads.mix(savedMixes.save(seed, title, state.data ?? []))}
+          onRemove={() => void downloads.remove(downloadKey('mix', savedMixId(seed)))}
+        />
+      }
     />
   )
 }
@@ -149,6 +161,7 @@ export function MixView({ value, kind = 'genre' }: { value: string; kind?: MixKi
 /** A kept lineup, played back exactly as it was saved. */
 export function SavedMixView({ id }: { id: string }) {
   const mix = findSavedMix(id)
+  const download = useDownload(downloadKey('mix', id))
   if (!mix) return <Empty>That saved mix is gone.</Empty>
   return (
     <TrackPage
@@ -168,6 +181,14 @@ export function SavedMixView({ id }: { id: string }) {
         >
           <Trash2 size={16} /> Remove
         </GhostButton>
+      }
+      download={
+        <DownloadButton
+          status={download}
+          disabled={!mix.tracks.length}
+          onDownload={() => void downloads.mix(mix)}
+          onRemove={() => void downloads.remove(downloadKey('mix', mix.id))}
+        />
       }
     />
   )

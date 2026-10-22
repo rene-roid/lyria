@@ -228,6 +228,31 @@ export function saveMix(mixes: SavedMix[], mix: SavedMix): SavedMix[] {
 
 export type WindowName = 'main' | 'host' | 'toast' | 'mini' | 'widget'
 
+/**
+ * A playlist or saved mix kept on disk for listening offline. A playlist follows the server: its
+ * lineup is refreshed on launch and new songs download. A saved mix is frozen, so it never changes.
+ */
+export interface Download {
+  /** `playlist:<id>` or `mix:<id>`. */
+  key: string
+  kind: 'playlist' | 'mix'
+  id: string
+  title: string
+  trackIds: string[]
+  /** Cover shown in the downloads list. */
+  coverArt?: string
+  addedAt: number
+}
+
+/** A download plus how far its songs have got. */
+export interface DownloadStatus extends Download {
+  done: number
+  /** Songs that would not download this session; they are tried again on the next sync. */
+  failed: number
+}
+
+export const downloadKey = (kind: Download['kind'], id: string): string => `${kind}:${id}`
+
 /** Re-encoding main hands to the audio host for the on-disk caches. */
 export type HostJob = { kind: 'opus'; kbps: number } | { kind: 'webp' }
 

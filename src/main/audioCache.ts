@@ -22,10 +22,16 @@ function dir(): string {
   return join(app.getPath('userData'), 'audio-cache')
 }
 
-/** Keyed per account, so two libraries that reuse the same track ids never share a file. */
-function fileFor(id: string): string {
-  const key = `${loadSession()?.username ?? ''}|${id}`
-  return join(dir(), createHash('sha1').update(key).digest('hex'))
+/**
+ * A song's file name, shared with the downloads folder. Keyed per account, so two libraries that
+ * reuse the same track ids never share a file.
+ */
+export function songName(id: string): string {
+  return createHash('sha1').update(`${loadSession()?.username ?? ''}|${id}`).digest('hex')
+}
+
+export function fileFor(id: string): string {
+  return join(dir(), songName(id))
 }
 
 function budget(): number {
@@ -88,12 +94,47 @@ async function download(id: string, url: string): Promise<string | null> {
 export async function bytes(id: string, url: string): Promise<Buffer | null> {
   const file = await ensure(id, url)
   if (!file) return null
+  return read(file)
+}
+
+/** Bytes of the cached copy if there is one, without going to the server for it. */
+export async function cached(id: string): Promise<Buffer | null> {
+  const file = fileFor(id)
+  try {
+    const now = new Date()
+    await utimes(file, now, now)
+  } catch {
+    return null
+  }
+  return read(file)
+}
+
+async function read(file: string): Promise<Buffer | null> {
   try {
     const body = await readFile(file)
     void shrinker.shrink(file, body)
     return body
   } catch {
     return null
+  }
+}
+
+/** Take a file over from elsewhere (a download being removed), as if the song had just been played. */
+export async function adopt(id: string, from: string): Promise<void> {
+  if (budget() <= 0) return void (await rm(from, { force: true }))
+  await mkdir(dir(), { recursive: true })
+  await rename(from, fileFor(id))
+  const now = new Date()
+  await utimes(fileFor(id), now, now)
+}
+
+/** Hand a cached song over to the downloads folder instead of fetching it again. */
+export async function release(id: string, to: string): Promise<boolean> {
+  try {
+    await rename(fileFor(id), to)
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -116,17 +157,20 @@ export function setCompressor(fn: Compressor): void {
   compressor = fn
 }
 
-const shrinker = new Shrinker({
-  wants: isLossless,
-  encoder: () => {
-    const { cacheCompress, cacheCompressKbps } = getSettings()
-    const fn = compressor
-    return fn && cacheCompress && cacheCompressKbps > 0 ? (body) => fn(body, cacheCompressKbps) : undefined
-  },
-  // Lossless audio as Opus comes out at a fifth of its size or less; one that barely shrinks
-  // was most likely near-silence or not what its header claimed, and is left as it is.
-  ratio: 0.8
-})
+/** The Opus encoder at the chosen bitrate, or undefined while compression is off. */
+export function songEncoder(): ((body: Buffer) => Promise<Buffer | null>) | undefined {
+  const { cacheCompress, cacheCompressKbps } = getSettings()
+  const fn = compressor
+  return fn && cacheCompress && cacheCompressKbps > 0 ? (body) => fn(body, cacheCompressKbps) : undefined
+}
+
+/**
+ * Lossless audio as Opus comes out at a fifth of its size or less; one that barely shrinks was
+ * most likely near-silence or not what its header claimed, and is left as it is.
+ */
+export const SONG_RATIO = 0.8
+
+const shrinker = new Shrinker({ wants: isLossless, encoder: songEncoder, ratio: SONG_RATIO })
 
 /** Compress what was cached before compression was on, or at another setting, most recent first. */
 export async function compressAll(): Promise<void> {

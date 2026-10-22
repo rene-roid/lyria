@@ -115,6 +115,7 @@ track-change toasts, a floating mini-player and a taskbar-area widget with a liv
 - 📊 **Taskbar Widget** — acrylic flyout pinned above the taskbar with a canvas visualiser fed by a Web Audio `AnalyserNode` at ~30fps
 - 📝 **Playlists** — create one from the library panel, from a track's context menu or from the whole queue, and add or remove songs from any row
 - ❤️ **Liked Songs** — heart anything from a track row or the now-playing bar; liked tracks collect into their own playlist
+- ⬇️ **Offline Downloads** — download a playlist or mix to play it with no connection; playlists follow the server, and plays made offline still reach your server's play counts once it is back
 - 💾 **Compact Caches** — songs you play, cover art and library pages are kept on disk for instant loads; lossless songs are re-encoded to Opus at a bitrate you choose and covers to WebP, in the background
 - ⏯ **Resume on Launch** — playback state is persisted on quit and restored where you left off
 - 🔐 **Encrypted Credentials** — only the derived Subsonic token is stored, encrypted with Electron's `safeStorage`; the plain password is never persisted

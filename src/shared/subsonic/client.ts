@@ -345,8 +345,9 @@ export class SubsonicClient {
     return this.call('unstar', { [key]: id })
   }
 
-  scrobble(id: string, submission: boolean): Promise<unknown> {
-    return this.call('scrobble', { id, submission, time: Date.now() })
+  /** `time` is when it was played, in ms; a play held back while offline keeps its own. */
+  scrobble(id: string, submission: boolean, time = Date.now()): Promise<unknown> {
+    return this.call('scrobble', { id, submission, time })
   }
 
   // ---- lyrics --------------------------------------------------------------

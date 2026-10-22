@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { release } from 'node:os'
 import { supportsNativeAcrylic } from '@shared/types'
 import type {
+  Download,
+  DownloadStatus,
   HostJob,
   PlayerCommandName,
   PlayerCommands,
@@ -120,11 +122,38 @@ const api = {
     want(id: string, url: string): Promise<Uint8Array | null> {
       return ipcRenderer.invoke('cache:want', id, url)
     },
+    /** The downloaded or cached copy, without going to the server. Null when there is none. */
+    local(id: string): Promise<Uint8Array | null> {
+      return ipcRenderer.invoke('cache:local', id)
+    },
+    /** A play that counts, for the server's play counts; main holds it while the server is away. */
+    played(id: string, time: number): void {
+      ipcRenderer.send('cache:played', id, time)
+    },
     stats(): Promise<{ bytes: number; count: number }> {
       return ipcRenderer.invoke('cache:stats')
     },
     clear(): Promise<void> {
       return ipcRenderer.invoke('cache:clear')
+    }
+  },
+
+  /** Playlists and saved mixes kept on disk for listening offline. */
+  downloads: {
+    list(): Promise<DownloadStatus[]> {
+      return ipcRenderer.invoke('downloads:list')
+    },
+    add(download: Omit<Download, 'addedAt'>): Promise<void> {
+      return ipcRenderer.invoke('downloads:add', download)
+    },
+    remove(key: string): Promise<void> {
+      return ipcRenderer.invoke('downloads:remove', key)
+    },
+    stats(): Promise<{ bytes: number; count: number }> {
+      return ipcRenderer.invoke('downloads:stats')
+    },
+    onChange(cb: (list: DownloadStatus[]) => void): Unsubscribe {
+      return subscribe('downloads:changed', cb)
     }
   },
 

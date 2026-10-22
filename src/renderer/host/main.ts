@@ -50,6 +50,8 @@ host.onCommand((cmd, payload) => {
 host.onFramesWanted((wanted) => engine.setFramesWanted(wanted))
 
 engine.fetchCached = (id, url) => cache.want(id, url)
+engine.findLocal = (id) => cache.local(id)
+engine.reportPlay = (id, time) => cache.played(id, time)
 
 host.onJob(async (job, body) => {
   const started = performance.now()

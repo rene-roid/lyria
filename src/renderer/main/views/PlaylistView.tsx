@@ -11,12 +11,16 @@ import { playFrom } from '../recents'
 import { playlistRecent, toggleSavedPlaylist, useSavedPlaylists } from '../playlists'
 import { ServerMixCover } from '../components/MixCover'
 import { useAsync } from '../useAsync'
+import { DownloadButton } from '../components/DownloadButton'
+import { downloads, useDownload } from '../downloads'
+import { downloadKey } from '@shared/types'
 
 export function PlaylistView({ id }: { id: string }) {
   const client = useClient()
   const state = useAsync(`playlist:${id}`, () => client?.getPlaylist(id), [client, id])
   const coverColor = useCoverColor(state.data?.coverArt ?? state.data?.entry[0]?.coverArt)
   const saved = useSavedPlaylists().includes(id)
+  const download = useDownload(downloadKey('playlist', id))
   const [query, setQuery] = useState('')
   const shown = useMemo(() => filterTracks(state.data?.entry ?? [], query), [state.data, query])
 
@@ -73,6 +77,12 @@ export function PlaylistView({ id }: { id: string }) {
             >
               <Heart size={28} fill={saved ? 'currentColor' : 'none'} />
             </ActionIcon>
+            <DownloadButton
+              status={download}
+              disabled={!songs.length}
+              onDownload={() => void downloads.playlist(pl)}
+              onRemove={() => void downloads.remove(downloadKey('playlist', id))}
+            />
           </>
         }
       />

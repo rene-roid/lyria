@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import type {
+  DownloadStatus,
   MiniOptions,
   NormalizeMode,
   OverlayAnchor,
@@ -16,6 +17,9 @@ import type {
 import { OVERLAY_ANCHORS, OVERLAY_BACKGROUNDS, THEMES } from '@shared/types'
 import type { ServerProbe } from '@shared/subsonic/client'
 import { clearCache } from '@renderer/shared/cache'
+import { Cover } from '@renderer/shared/Cover'
+import { downloads, useDownloads } from '../downloads'
+import { nav } from '../nav'
 import { useSessionStore, useSettings } from '@renderer/shared/sessionStore'
 import { GhostButton, PageTitle, Range, SectionHeader, Spinner } from '../components/ui'
 
@@ -615,6 +619,70 @@ function NormalizeSetting({ value, onChange }: { value: NormalizeMode; onChange:
   )
 }
 
+const downloadStats = (): Promise<CacheStats> => window.sonora.downloads.stats()
+
+/** Everything kept for offline listening, how far each has got, and a way to let it go. */
+function DownloadsSection() {
+  const list = useDownloads()
+  const used = useCacheStats(downloadStats)
+  const open = (d: DownloadStatus): void =>
+    nav.go(d.kind === 'playlist' ? { name: 'playlist', id: d.id } : { name: 'savedMix', id: d.id })
+
+  return (
+    <section className="mb-8">
+      <SectionHeader
+        title="Downloads"
+        action={
+          list.length > 0 && (
+            <GhostButton onClick={() => list.forEach((d) => void downloads.remove(d.key))}>Remove all</GhostButton>
+          )
+        }
+      />
+      <p className="mb-3 px-3 text-xs text-ink-3">
+        Playlists and mixes you download play with no connection at all, and are not counted against the song cache.
+        Downloaded playlists pick up songs added on the server the next time Sonora can reach it. Plays made offline
+        are sent to the server once it answers again, so its play counts stay right.
+      </p>
+      <div className="px-3 pb-2 text-xs text-ink-2">
+        {used ? `${formatBytes(used.bytes)} for ${plural(used.count, 'song')}` : '…'}
+      </div>
+      {list.length === 0 ? (
+        <div className="px-3 py-2 text-xs text-ink-3">
+          Nothing yet. Use the download button on a playlist or mix to keep it here.
+        </div>
+      ) : (
+        <ul>
+          {list.map((d) => {
+            const total = d.trackIds.length
+            return (
+              <li key={d.key} className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-white/[0.04]">
+                <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => open(d)}>
+                  <Cover id={d.coverArt} size={100} className="h-10 w-10 shrink-0" rounded="rounded" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{d.title}</span>
+                    <span className="block text-xs text-ink-2">
+                      {d.kind === 'playlist' ? 'Playlist' : 'Mix'} {'·'}{' '}
+                      {d.done >= total ? plural(total, 'song') : `${d.done} of ${plural(total, 'song')}`}
+                      {d.failed > 0 && <span className="text-red-400"> {'·'} {d.failed} failed, retried later</span>}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  className="shrink-0 rounded p-1 text-ink-3 hover:bg-white/10 hover:text-ink"
+                  title="Remove download"
+                  onClick={() => void downloads.remove(d.key)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 const songStats = (): Promise<CacheStats> => window.sonora.cache.stats()
 const artStats = (): Promise<CacheStats> => window.sonora.art.stats()
 const metaStats = (): Promise<CacheStats> => window.sonora.meta.stats()
@@ -823,6 +891,8 @@ export function SettingsView() {
           onChange={(v) => update({ soundtrackTitleMatch: v })}
         />
       </section>
+
+      <DownloadsSection />
 
       <SongCache settings={settings} onChange={update} />
 

@@ -6,6 +6,7 @@ import {
   type PlayerEventName,
   type PlayerEvents,
   type PlayerState,
+  type Download,
   type Session,
   type Settings,
   type SettingsPatch
@@ -20,7 +21,9 @@ import {
 } from '@shared/subsonic/client'
 import * as artCache from './artCache'
 import * as audioCache from './audioCache'
+import * as downloads from './downloads'
 import * as metaCache from './metaCache'
+import * as scrobbles from './scrobbles'
 import { setAutoLaunch } from './autolaunch'
 import { clearSession, loadSession, saveSession } from './credentials'
 import { getSettings, updateSettings } from './store'
@@ -178,6 +181,8 @@ export function setupIpc(): void {
       }
       saveSession(session)
       broadcast('auth:changed', [session])
+      void downloads.sync()
+      void scrobbles.flush()
       return session
     }
   )
@@ -249,6 +254,7 @@ export function setupIpc(): void {
     // Turned on, or a new bitrate: work through what is already on disk too.
     if (next.cacheCompress && (!before.cacheCompress || next.cacheCompressKbps !== before.cacheCompressKbps)) {
       void audioCache.compressAll()
+      downloads.compressAll()
     }
     broadcast('settings:changed', [next])
     return next
@@ -262,10 +268,25 @@ export function setupIpc(): void {
     if (windowNameOf(e.sender.id) !== 'host' || !servers.some((s) => url.startsWith(`${s}/`))) {
       return Promise.resolve(null)
     }
-    return audioCache.bytes(id, url)
+    return downloads.bytes(id).then((own) => own ?? audioCache.bytes(id, url))
+  })
+  /** The copy already on disk, downloaded or cached, so a song plays without the server at all. */
+  ipcMain.handle('cache:local', async (e, id: string): Promise<Buffer | null> => {
+    if (windowNameOf(e.sender.id) !== 'host') return null
+    return (await downloads.bytes(id)) ?? audioCache.cached(id)
+  })
+  ipcMain.on('cache:played', (e, id: string, time: number) => {
+    if (windowNameOf(e.sender.id) === 'host' && typeof id === 'string') scrobbles.submit(id, Number(time) || Date.now())
   })
   ipcMain.handle('cache:stats', () => audioCache.stats())
   ipcMain.handle('cache:clear', () => audioCache.clear())
+
+  // ---- downloads ------------------------------------------------------------
+  ipcMain.handle('downloads:list', () => downloads.list())
+  ipcMain.handle('downloads:add', (_e, d: Omit<Download, 'addedAt'>) => downloads.add(d))
+  ipcMain.handle('downloads:remove', (_e, key: string) => downloads.remove(key))
+  ipcMain.handle('downloads:stats', () => downloads.stats())
+  downloads.onChange((list) => broadcast('downloads:changed', [list]))
 
   // ---- cover art cache -----------------------------------------------------
   ipcMain.handle('art:stats', () => artCache.stats())

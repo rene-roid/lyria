@@ -2,9 +2,11 @@ import { app, BrowserWindow, globalShortcut, nativeTheme, screen, session } from
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import * as artCache from './artCache'
 import * as audioCache from './audioCache'
+import * as downloads from './downloads'
 import { runInHost, setupHostJobs } from './hostJobs'
 import { setupIpc, setPlayerHooks, sendCommand, playerState } from './ipc'
 import { flushSync as flushMetaCache } from './metaCache'
+import * as scrobbles from './scrobbles'
 import { flushSettings, getSettings, onSettingsChange, updateSettings } from './store'
 import { sanitizeResume } from '@shared/types'
 import { loadSession } from './credentials'
@@ -27,6 +29,9 @@ artCache.registerArtScheme()
 
 /** How long after launch the caches start re-encoding what is already on disk, clear of start-up. */
 const SWEEP_DELAY_MS = 30_000
+
+/** How often downloaded playlists are checked against the server for songs added or removed. */
+const DOWNLOAD_SYNC_MS = 30 * 60_000
 
 // Only one Sonora at a time; a second launch focuses the existing main window.
 if (!app.requestSingleInstanceLock()) {
@@ -97,6 +102,12 @@ app.whenReady().then(() => {
   setTimeout(() => {
     void artCache.compressAll().then(() => audioCache.compressAll())
   }, SWEEP_DELAY_MS)
+  // Plays held back while offline go out first, then downloads catch up with the server.
+  void scrobbles.flush().finally(() => void downloads.sync())
+  setInterval(() => {
+    void scrobbles.flush()
+    void downloads.sync()
+  }, DOWNLOAD_SYNC_MS)
 
   const settings = getSettings()
   const startHidden = process.argv.includes('--hidden')

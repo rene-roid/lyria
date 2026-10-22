@@ -17,6 +17,7 @@ export function TrackPage({
   origin,
   cover,
   actions,
+  download,
   color
 }: {
   eyebrow: string
@@ -28,6 +29,8 @@ export function TrackPage({
   cover?: ReactNode
   /** Extra buttons after Play and Shuffle, for whatever else this kind of page can do. */
   actions?: ReactNode
+  /** A download button, kept beside Shuffle like on a playlist page rather than with the actions. */
+  download?: ReactNode
   /** The header band; defaults to the hue the page's tag artwork is washed with. */
   color?: string
 }) {
@@ -62,6 +65,7 @@ export function TrackPage({
             >
               <Shuffle size={28} />
             </ActionIcon>
+            {download}
             {actions}
           </>
         }

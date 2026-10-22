@@ -59,6 +59,20 @@ Three on-disk caches live under the user data folder, each with a size and a cle
   memory and written as one gzipped JSON file. The main window loads it all before its first render,
   so `cacheRead` stays synchronous, and wipes it when the account changes.
 
+## Offline
+
+- **Downloads** (`src/main/downloads.ts`): playlists and saved mixes kept for offline listening, in
+  a folder of their own outside the song cache's budget. A song already cached is moved over rather
+  than fetched again, and a removed download hands its songs back to the cache. Playlists are
+  re-synced with the server on launch and every 30 minutes. Downloading a generated mix saves its
+  lineup first, since those roll over daily.
+- **Local-first playback**: the audio host asks main for a downloaded or cached copy (`cache:local`)
+  before streaming, so a song on disk plays with the server unreachable; a copy that fails to play
+  falls back to the stream.
+- **Play counts** (`src/main/scrobbles.ts`): plays are reported through main whichever copy played.
+  One the server cannot take yet is kept in `pending-scrobbles.json` with the time it happened and
+  sent, oldest first, when the server answers again.
+
 ## CORS and the visualiser
 
 `AnalyserNode` needs the stream response to be CORS-readable. Navidrome already sends

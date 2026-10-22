@@ -3,7 +3,7 @@
  * lineup it had at that moment; they live in the settings file, which is what makes them show up
  * on the next launch even with the server unreachable.
  */
-import { saveMix, viewKey, type RecentItem, type SavedMix, type Track } from '@shared/types'
+import { downloadKey, saveMix, viewKey, type RecentItem, type SavedMix, type Track } from '@shared/types'
 import { useSessionStore } from '@renderer/shared/sessionStore'
 import type { MixSeed } from './mixes'
 
@@ -20,12 +20,15 @@ export function useSavedMixes(): SavedMix[] {
 export const findSavedMix = (id: string): SavedMix | undefined => list().find((m) => m.id === id)
 
 export const savedMixes = {
-  save(seed: MixSeed, title: string, tracks: Track[]): void {
+  save(seed: MixSeed, title: string, tracks: Track[]): SavedMix {
     const mix: SavedMix = { id: savedMixId(seed), title, seed, savedAt: Date.now(), tracks }
     void window.sonora.settings.update({ savedMixes: saveMix(list(), mix) })
+    return mix
   },
+  /** Also drops its download: a mix no longer kept has nothing to play its songs from. */
   remove(id: string): void {
     void window.sonora.settings.update({ savedMixes: list().filter((m) => m.id !== id) })
+    void window.sonora.downloads.remove(downloadKey('mix', id))
   }
 }
 
