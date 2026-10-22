@@ -44,6 +44,35 @@ Windows, libsecret on Linux; without a keyring the derived token is stored unenc
 is logged). The plain password is never persisted. `keytar` was not used because it is archived and
 has no prebuilt binaries for current Electron versions.
 
+## Caches
+
+Three on-disk caches live under the user data folder, each with a size and a clear button in Settings:
+
+- **Songs** (`src/main/audioCache.ts`): played tracks, evicted least recently played first. With
+  compression on, FLAC and WAV files are re-encoded to Ogg Opus after they land and the original is
+  swapped for the smaller file. Main has no codecs, so it hands the bytes to the audio host
+  (`src/main/hostJobs.ts` → `src/renderer/host/compress.ts`), which decodes them with Web Audio,
+  encodes with WebCodecs `AudioEncoder` and wraps the packets with `src/shared/oggOpus.ts`. Jobs run
+  one at a time; songs cached before compression was on are swept in the background after launch.
+- **Cover art** (`src/main/artCache.ts`): served over `sonora-art://`, re-encoded to WebP the same way.
+- **Library responses** (`src/main/metaCache.ts`): album lists, artists, playlists and pages, held in
+  memory and written as one gzipped JSON file. The main window loads it all before its first render,
+  so `cacheRead` stays synchronous, and wipes it when the account changes.
+
+## Offline
+
+- **Downloads** (`src/main/downloads.ts`): playlists and saved mixes kept for offline listening, in
+  a folder of their own outside the song cache's budget. A song already cached is moved over rather
+  than fetched again, and a removed download hands its songs back to the cache. Playlists are
+  re-synced with the server on launch and every 30 minutes. Downloading a generated mix saves its
+  lineup first, since those roll over daily.
+- **Local-first playback**: the audio host asks main for a downloaded or cached copy (`cache:local`)
+  before streaming, so a song on disk plays with the server unreachable; a copy that fails to play
+  falls back to the stream.
+- **Play counts** (`src/main/scrobbles.ts`): plays are reported through main whichever copy played.
+  One the server cannot take yet is kept in `pending-scrobbles.json` with the time it happened and
+  sent, oldest first, when the server answers again.
+
 ## CORS and the visualiser
 
 `AnalyserNode` needs the stream response to be CORS-readable. Navidrome already sends

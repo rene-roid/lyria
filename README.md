@@ -7,8 +7,8 @@
 **A Spotify-like desktop client for your own music server.**
 
 Point it at a [Navidrome](https://www.navidrome.org/) (or any Subsonic/OpenSubsonic) server — it
-gives you synced lyrics, Fluent 2 track-change toasts, a floating mini-player and a taskbar-area
-widget with a live audio visualiser.
+gives you a Spotify-style library with mixes, genres and moods, synced lyrics, Fluent 2
+track-change toasts, a floating mini-player and a taskbar-area widget with a live audio visualiser.
 
 [![Electron](https://img.shields.io/badge/Electron-33-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=black)](https://react.dev)
@@ -26,13 +26,13 @@ widget with a live audio visualiser.
 <tr>
 <td width="50%">
 
-**Home** — pinned playlists, recently played and recently added
+**Home** — Liked Songs, recently played and your playlists, with a library panel beside it
 <img src="docs/screenshots/home.png" alt="Home" />
 
 </td>
 <td width="50%">
 
-**Album** — multi-disc track list, play/shuffle/queue actions
+**Album** — cover-tinted header, multi-disc track list, play/shuffle/queue actions
 <img src="docs/screenshots/album.png" alt="Album view" />
 
 </td>
@@ -52,10 +52,30 @@ widget with a live audio visualiser.
 </td>
 </tr>
 <tr>
-<td colspan="2">
+<td width="50%">
 
-**Soundtracks** — scores in their own view, multi-disc releases shown once
-<img src="docs/screenshots/soundtracks.png" alt="Soundtracks" />
+**Mixes** — your server's mixes plus ones Sonora builds from what you play
+<img src="docs/screenshots/mixes.png" alt="Mixes" />
+
+</td>
+<td width="50%">
+
+**Moods** — every mood gets artwork and a colour of its own
+<img src="docs/screenshots/moods.png" alt="Moods" />
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Genres** — the same treatment for genres, drawn from your cover art
+<img src="docs/screenshots/genres.png" alt="Genres" />
+
+</td>
+<td width="50%">
+
+**Settings** — accent colour, widgets, normalisation and caches
+<img src="docs/screenshots/settings.png" alt="Settings" />
 
 </td>
 </tr>
@@ -85,16 +105,21 @@ widget with a live audio visualiser.
 
 ## Features
 
-- 🎵 **Full Library UI** — home, albums, artists, playlists, search, favorites and a queue panel, all backed by the Subsonic API
+- 🎵 **Spotify-style Library** — a sidebar with Home, Albums, Soundtracks, Artists, Mixes, Genres and Moods, a *Your Library* panel (playlists, mixes, albums, artists, with a heart filter for saved items) and a top bar with search, all backed by the Subsonic API
+- ✨ **Mixes** — your server's NaviBeat and Explo mixes alongside genre, mood and artist mixes Sonora builds from what you play; keep the ones you like
+- 🎨 **Genres & Moods** — cards with artwork and a look of their own, and page headers tinted from the cover art
+- 🖌 **Accent Colour** — pick Blue or Green in Settings; it applies to every Sonora window
 - 🎤 **Synced Lyrics** — OpenSubsonic structured lyrics with an LRC/SRT/plain fallback, extrapolated between position updates so the highlighted line tracks the audio
 - 🔔 **Fluent Toasts** — a frameless, click-through, always-on-top card that animates in on every track change
 - 🪟 **Mini-player** — draggable always-on-top player that remembers where you put it
 - 📊 **Taskbar Widget** — acrylic flyout pinned above the taskbar with a canvas visualiser fed by a Web Audio `AnalyserNode` at ~30fps
-- 📝 **Playlists** — create one from the sidebar, from a track's context menu or from the whole queue, and add or remove songs from any row
-- ❤️ **Favorites** — star anything from a track row or the now-playing bar; starred tracks collect into their own view
+- 📝 **Playlists** — create one from the library panel, from a track's context menu or from the whole queue, and add or remove songs from any row
+- ❤️ **Liked Songs** — heart anything from a track row or the now-playing bar; liked tracks collect into their own playlist
+- ⬇️ **Offline Downloads** — download a playlist or mix to play it with no connection; playlists follow the server, and plays made offline still reach your server's play counts once it is back
+- 💾 **Compact Caches** — songs you play, cover art and library pages are kept on disk for instant loads; lossless songs are re-encoded to Opus at a bitrate you choose and covers to WebP, in the background
 - ⏯ **Resume on Launch** — playback state is persisted on quit and restored where you left off
 - 🔐 **Encrypted Credentials** — only the derived Subsonic token is stored, encrypted with Electron's `safeStorage`; the plain password is never persisted
-- ⌨️ **Media Keys & Shortcuts** — global media keys (toggleable in Settings), plus `Space` play/pause, `Ctrl+←/→` previous/next and `Ctrl+↑/↓` volume
+- ⌨️ **Media Keys & Shortcuts** — global media keys (toggleable in Settings), plus `Space` play/pause, `Ctrl+←/→` previous/next, `Ctrl+↑/↓` volume, `Ctrl+K` or `/` to search and `Alt+←/→` to go back and forward
 - 🧪 **Mock Server** — a bundled OpenSubsonic mock with synthetic audio, art and synced lyrics, so you can develop with no server at all
 
 ## Tech Stack

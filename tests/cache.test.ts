@@ -1,59 +1,100 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 
-const store = new Map<string, string>()
-let full = false
-// Minimal stand-in for the browser API; `full` makes setItem throw the way a blown quota does.
+const legacy = new Map<string, string>()
+// Minimal stand-in for the browser API, holding what an older build left behind.
 ;(globalThis as { localStorage?: unknown }).localStorage = {
-  getItem: (k: string) => store.get(k) ?? null,
-  setItem: (k: string, v: string) => {
-    if (full) throw new Error('QuotaExceededError')
-    store.set(k, v)
-  },
-  removeItem: (k: string) => void store.delete(k),
-  key: (i: number) => [...store.keys()][i] ?? null,
+  getItem: (k: string) => legacy.get(k) ?? null,
+  setItem: (k: string, v: string) => void legacy.set(k, v),
+  removeItem: (k: string) => void legacy.delete(k),
+  key: (i: number) => [...legacy.keys()][i] ?? null,
   get length() {
-    return store.size
+    return legacy.size
   }
 }
 
-const { cacheRead, cacheWrite, setCacheScope } = await import('../src/renderer/shared/cache')
+// Main's side of the bridge: what it has on disk, and what the window sent it.
+let disk: { scope: string; entries: [string, string][] } = { scope: '', entries: [] }
+const sent: unknown[][] = []
+;(globalThis as { window?: unknown }).window = {
+  sonora: {
+    meta: {
+      load: async () => disk,
+      setScope: (scope: string) => void sent.push(['scope', scope]),
+      put: (key: string, value: string | null) => void sent.push(['put', key, value]),
+      clear: async () => void sent.push(['clear'])
+    }
+  }
+}
+
+const fresh = async () => {
+  // A new copy of the module per test, as each window gets its own.
+  const mod = await import(`../src/renderer/shared/cache?${Math.random()}`)
+  return mod as typeof import('../src/renderer/shared/cache')
+}
 
 describe('cache', () => {
   beforeEach(() => {
-    store.clear()
-    full = false
+    legacy.clear()
+    sent.length = 0
+    disk = { scope: 'http://a|bob', entries: [] }
   })
 
-  test('round-trips a value', () => {
-    cacheWrite('albums:newest', [{ id: 'a1' }])
+  test('reads nothing and writes nothing before it is hydrated', async () => {
+    disk.entries = [['artists', '[{"id":"x"}]']]
+    const { cacheRead, cacheWrite, setCacheScope } = await fresh()
+    expect(cacheRead('artists')).toBeUndefined()
+    cacheWrite('artists', [])
+    setCacheScope('http://a|alice')
+    expect(sent).toEqual([])
+  })
+
+  test('serves what main had on disk, and sends new values back', async () => {
+    disk.entries = [['albums:newest', '[{"id":"a1"}]']]
+    const { cacheRead, cacheWrite, hydrateCache } = await fresh()
+    await hydrateCache()
     expect(cacheRead<unknown>('albums:newest')).toEqual([{ id: 'a1' }])
+    cacheWrite('albums:newest', [{ id: 'a1' }]) // unchanged: nothing to send
+    cacheWrite('artists', [{ id: 'x' }])
+    expect(sent).toEqual([['put', 'artists', '[{"id":"x"}]']])
   })
 
-  test('misses on unknown and undefined keys', () => {
+  test('misses on unknown and undefined keys, and survives corrupt entries', async () => {
+    disk.entries = [['bad', '{not json']]
+    const { cacheRead, cacheWrite, hydrateCache } = await fresh()
+    await hydrateCache()
     expect(cacheRead('nope')).toBeUndefined()
     expect(cacheRead(undefined)).toBeUndefined()
-    cacheWrite(undefined, [1])
-    expect(store.size).toBe(0)
-  })
-
-  test('survives corrupt entries', () => {
-    store.set('sonora.cache.bad', '{not json')
     expect(cacheRead('bad')).toBeUndefined()
+    cacheWrite(undefined, [1])
+    expect(sent).toEqual([])
   })
 
-  test('drops cached entries when the scope changes, and keeps them when it does not', () => {
-    setCacheScope('http://a|bob')
-    cacheWrite('artists', [{ id: 'x' }])
+  test('drops cached entries when the scope changes, and keeps them when it does not', async () => {
+    disk.entries = [['artists', '[{"id":"x"}]']]
+    const { cacheRead, hydrateCache, onCacheClear, setCacheScope } = await fresh()
+    let cleared = 0
+    onCacheClear(() => (cleared += 1))
+    await hydrateCache()
     setCacheScope('http://a|bob')
     expect(cacheRead<unknown>('artists')).toEqual([{ id: 'x' }])
     setCacheScope('http://a|alice')
     expect(cacheRead<unknown>('artists')).toBeUndefined()
+    expect(cleared).toBe(1)
+    expect(sent).toEqual([['scope', 'http://a|alice']])
   })
 
-  test('clears itself when storage is full instead of throwing', () => {
-    cacheWrite('artists', [{ id: 'x' }])
-    full = true
-    expect(() => cacheWrite('albums:newest', [{ id: 'y' }])).not.toThrow()
-    expect(cacheRead<unknown>('artists')).toBeUndefined()
+  test('carries over what an older build kept in localStorage, then removes it', async () => {
+    disk = { scope: '', entries: [] }
+    legacy.set('sonora.cacheScope', 'http://a|bob')
+    legacy.set('sonora.cache.artists', '[{"id":"x"}]')
+    legacy.set('unrelated', 'kept')
+    const { cacheRead, hydrateCache } = await fresh()
+    await hydrateCache()
+    expect(cacheRead<unknown>('artists')).toEqual([{ id: 'x' }])
+    expect(sent).toEqual([
+      ['scope', 'http://a|bob'],
+      ['put', 'artists', '[{"id":"x"}]']
+    ])
+    expect([...legacy.keys()]).toEqual(['unrelated'])
   })
 })

@@ -92,6 +92,15 @@ export class AudioEngine {
   /** Pulls a track into the on-disk cache and resolves with its bytes. Undefined disables caching. */
   fetchCached?: (id: string, url: string) => Promise<Uint8Array | null>
 
+  /** A downloaded or already-cached copy, played instead of the stream. Null when there is none. */
+  findLocal?: (id: string) => Promise<Uint8Array | null>
+
+  /**
+   * Tells the server a play counted. Main queues it while the server is unreachable, so plays of
+   * downloaded songs offline still reach the play counts. Without it the client is called directly.
+   */
+  reportPlay?: (id: string, time: number) => void
+
   private async onAudioError(): Promise<void> {
     const a = this.audio
     const code = a.error?.code
@@ -328,15 +337,34 @@ export class AudioEngine {
     this.pendingSeek = seek
     this.applyGain()
     const url = this.client.streamUrl(track.id)
-    this.audio.src = url
-    this.audio.load()
-    this.cacheAhead(track, url)
+    const token = (this.localToken += 1)
     this.emit('trackChanged', { track, index })
     this.emit('positionUpdate', { position: seek, duration: track.duration })
-    if (autoplay) {
-      void this.client.scrobble(track.id, false).catch(() => undefined)
-      void this.safePlay()
+    if (autoplay) void this.client.scrobble(track.id, false).catch(() => undefined)
+
+    const start = (src: string, local: string | null): void => {
+      // The previous copy is let go only once the element has moved off it.
+      const previous = this.localUrl
+      this.localUrl = local
+      this.audio.src = src
+      this.audio.load()
+      if (previous && previous !== local) URL.revokeObjectURL(previous)
+      if (autoplay) void this.safePlay()
     }
+    const stream = (): void => {
+      start(url, null)
+      this.cacheAhead(track, url)
+    }
+    if (!this.findLocal) return stream()
+    // A copy on disk plays straight away, server or no server; only a miss goes to the network.
+    void this.findLocal(track.id)
+      .catch(() => null)
+      .then((bytes) => {
+        if (token !== this.localToken) return
+        if (!bytes?.length) return stream()
+        const local = URL.createObjectURL(new Blob([bytes as BlobPart]))
+        start(local, local)
+      })
   }
 
   private async safePlay(): Promise<void> {
@@ -458,7 +486,8 @@ export class AudioEngine {
     const track = this.current
     if (!track || !this.client) return
     this.scrobbleSubmitted = true
-    void this.client.scrobble(track.id, true).catch(() => undefined)
+    if (this.reportPlay) this.reportPlay(track.id, Date.now())
+    else void this.client.scrobble(track.id, true).catch(() => undefined)
   }
 
   private emitQueue(): void {

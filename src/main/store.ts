@@ -39,7 +39,7 @@ let cached: Settings | undefined
 
 function readSettings(): Settings {
   const saved = store.get('settings') ?? {}
-  return {
+  return sanitizeCaches({
     ...defaultSettings,
     ...saved,
     widgets: { ...defaultSettings.widgets, ...(saved.widgets ?? {}) },
@@ -50,7 +50,7 @@ function readSettings(): Settings {
     // Entries written before the shelf stored an origin have no key and cannot be played.
     recents: (saved.recents ?? []).filter((r) => r?.key),
     savedMixes: (saved.savedMixes ?? []).filter((m) => m?.id && m.tracks?.length)
-  }
+  })
 }
 
 export function getSettings(): Settings {
@@ -121,6 +121,16 @@ function sanitizeToast(saved: Partial<ToastOptions> | undefined): ToastOptions {
   }
 }
 
+/** The cache sizes and bitrate can be typed in by hand, so keep them to numbers that make sense. */
+function sanitizeCaches(s: Settings): Settings {
+  return {
+    ...s,
+    cacheMaxGb: clamp(s.cacheMaxGb, 0, 4096, defaultSettings.cacheMaxGb),
+    artCacheMaxMb: clamp(s.artCacheMaxMb, 0, 65536, defaultSettings.artCacheMaxMb),
+    cacheCompressKbps: Math.round(clamp(s.cacheCompressKbps, 32, 512, defaultSettings.cacheCompressKbps))
+  }
+}
+
 type Listener = (settings: Settings) => void
 const listeners = new Set<Listener>()
 
@@ -131,7 +141,7 @@ export function onSettingsChange(fn: Listener): () => void {
 
 export function updateSettings(patch: SettingsPatch): Settings {
   const before = getSettings()
-  const next: Settings = {
+  const next: Settings = sanitizeCaches({
     ...before,
     ...patch,
     widgets: { ...before.widgets, ...(patch.widgets ?? {}) },
@@ -139,7 +149,7 @@ export function updateSettings(patch: SettingsPatch): Settings {
     mini: sanitizeMini({ ...before.mini, ...(patch.mini ?? {}) }),
     toast: sanitizeToast({ ...before.toast, ...(patch.toast ?? {}) }),
     windowBounds: { ...before.windowBounds, ...(patch.windowBounds ?? {}) }
-  }
+  })
   cached = next
   scheduleWrite()
   for (const fn of listeners) fn(next)

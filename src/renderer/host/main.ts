@@ -1,5 +1,6 @@
 import { SubsonicClient } from '@shared/subsonic/client'
 import type { Session } from '@shared/types'
+import { toOpus, toWebp } from './compress'
 import { AudioEngine } from './engine'
 
 /**
@@ -49,6 +50,18 @@ host.onCommand((cmd, payload) => {
 host.onFramesWanted((wanted) => engine.setFramesWanted(wanted))
 
 engine.fetchCached = (id, url) => cache.want(id, url)
+engine.findLocal = (id) => cache.local(id)
+engine.reportPlay = (id, time) => cache.played(id, time)
+
+host.onJob(async (job, body) => {
+  const started = performance.now()
+  const out = job.kind === 'opus' ? await toOpus(body, job.kbps) : await toWebp(body)
+  if (job.kind === 'opus') {
+    const mb = (n: number): string => (n / 1024 ** 2).toFixed(1)
+    log(out ? `compressed ${mb(body.byteLength)} → ${mb(out.byteLength)} MB in ${Math.round(performance.now() - started)} ms` : 'left a song as it was')
+  }
+  return out
+})
 
 async function boot(): Promise<void> {
   const s = await settings.get()

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import type {
+  DownloadStatus,
   MiniOptions,
   NormalizeMode,
   OverlayAnchor,
@@ -15,11 +16,163 @@ import type {
 } from '@shared/types'
 import { OVERLAY_ANCHORS, OVERLAY_BACKGROUNDS, THEMES } from '@shared/types'
 import type { ServerProbe } from '@shared/subsonic/client'
+import { clearCache } from '@renderer/shared/cache'
+import { Cover } from '@renderer/shared/Cover'
+import { downloads, useDownloads } from '../downloads'
+import { nav } from '../nav'
 import { useSessionStore, useSettings } from '@renderer/shared/sessionStore'
 import { GhostButton, PageTitle, Range, SectionHeader, Spinner } from '../components/ui'
 
 const field =
   'w-full rounded-md border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-ink outline-none transition focus:border-accent focus:bg-white/[0.08]'
+
+/** Rounded to `step` without the float noise (0.1 + 0.2) that would otherwise show in the box. */
+const snap = (n: number, step: number): number => Number((Math.round(n / step) * step).toFixed(4))
+
+/**
+ * A value typed in by hand. It commits on Enter or when focus leaves, clamped and snapped to
+ * `step`; Escape or anything that is not a number puts the old value back.
+ */
+function NumberInput({
+  label,
+  value,
+  min,
+  max,
+  step,
+  unit,
+  onCommit
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  unit?: string
+  onCommit: (v: number) => void
+}) {
+  const [text, setText] = useState<string>()
+  const cancelled = useRef(false)
+  const commit = (): void => {
+    const typed = text
+    setText(undefined)
+    if (cancelled.current || typed === undefined) {
+      cancelled.current = false
+      return
+    }
+    const n = Number(typed.trim().replace(',', '.'))
+    if (typed.trim() === '' || !Number.isFinite(n)) return
+    const v = snap(Math.min(max, Math.max(min, n)), step)
+    if (v !== value) onCommit(v)
+  }
+  return (
+    <div className="flex h-7 shrink-0 items-center rounded-md border border-white/10 bg-white/[0.06] transition focus-within:border-accent focus-within:bg-white/[0.08]">
+      <input
+        aria-label={label}
+        inputMode="decimal"
+        className="w-14 bg-transparent px-2 text-right text-xs tabular-nums text-ink outline-none"
+        value={text ?? String(snap(value, step))}
+        onChange={(e) => setText(e.target.value)}
+        onFocus={(e) => e.currentTarget.select()}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+          if (e.key === 'Escape') {
+            cancelled.current = true
+            e.currentTarget.blur()
+          }
+        }}
+      />
+      {unit && <span className="pr-2 text-xs text-ink-3">{unit}</span>}
+    </div>
+  )
+}
+
+/**
+ * A setting picked on a slider or typed into the box beside it. The box may go past the slider's
+ * own range (`inputMin`/`inputMax`); the slider then just sits at its end.
+ */
+function SliderRow({
+  label,
+  description,
+  value,
+  min,
+  max,
+  step,
+  inputMin = min,
+  inputMax = max,
+  inputStep = step,
+  unit,
+  onChange,
+  onRelease
+}: {
+  label: string
+  description: ReactNode
+  value: number
+  min: number
+  max: number
+  step: number
+  inputMin?: number
+  inputMax?: number
+  inputStep?: number
+  unit?: string
+  onChange: (v: number) => void
+  onRelease?: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-6 px-3 py-3">
+      <div className="min-w-0">
+        <div className="text-sm font-medium">{label}</div>
+        <div className="text-xs text-ink-2">{description}</div>
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        <Range
+          aria-label={label}
+          className="w-40"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          onPointerUp={onRelease}
+        />
+        <NumberInput
+          label={label}
+          value={value}
+          min={inputMin}
+          max={inputMax}
+          step={inputStep}
+          unit={unit}
+          onCommit={onChange}
+        />
+      </div>
+    </div>
+  )
+}
+
+type CacheStats = { bytes: number; count: number }
+
+/**
+ * What a cache holds right now. Polled while the panel is open, since eviction and the background
+ * re-encoding both change it without anything here asking.
+ */
+function useCacheStats(get: () => Promise<CacheStats>): CacheStats | undefined {
+  const [stats, setStats] = useState<CacheStats>()
+  useEffect(() => {
+    const refresh = (): void => void get().then(setStats, () => undefined)
+    refresh()
+    const timer = window.setInterval(refresh, 3000)
+    return () => window.clearInterval(timer)
+  }, [get])
+  return stats
+}
+
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
+
+function formatBytes(n: number): string {
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(2)} GB`
+  if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(n >= 100 * 1024 ** 2 ? 0 : 1)} MB`
+  return `${Math.round(n / 1024)} KB`
+}
 
 /**
  * Alternate URLs for the same library (LAN, VPN, public). Sonora pings them all and uses
@@ -239,25 +392,18 @@ function OpacitySlider({
   value: number
   onChange: (v: number) => void
 }) {
-  const pct = Math.round(value * 100)
   return (
-    <label className="flex items-center justify-between gap-6 px-3 py-3">
-      <div>
-        <div className="text-sm font-medium">{label}</div>
-        <div className="text-xs text-ink-2">{description}</div>
-      </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <Range
-          className="w-40"
-          min={min}
-          max={100}
-          step={5}
-          value={pct}
-          onChange={(e) => onChange(Number(e.target.value) / 100)}
-        />
-        <span className="w-9 shrink-0 text-right text-xs tabular-nums text-ink-3">{pct}%</span>
-      </div>
-    </label>
+    <SliderRow
+      label={label}
+      description={description}
+      value={Math.round(value * 100)}
+      min={min}
+      max={100}
+      step={5}
+      inputStep={1}
+      unit="%"
+      onChange={(pct) => onChange(pct / 100)}
+    />
   )
 }
 
@@ -389,20 +535,19 @@ function ToastSettings({
       <SectionHeader title="Track change toasts" />
       <AnchorPicker value={value.anchor} onChange={(anchor) => onChange({ anchor })} />
       <ChromeSettings value={value} onChange={onChange} />
-      <label className="flex items-center justify-between gap-6 px-3 py-3">
-        <div>
-          <div className="text-sm font-medium">Duration</div>
-          <div className="text-xs text-ink-2">{(durationMs / 1000).toFixed(1)} seconds on screen</div>
-        </div>
-        <Range
-          className="w-40"
-          min={1500}
-          max={8000}
-          step={250}
-          value={durationMs}
-          onChange={(e) => onDuration(Number(e.target.value))}
-        />
-      </label>
+      <SliderRow
+        label="Duration"
+        description="How long each card stays on screen"
+        value={durationMs / 1000}
+        min={1.5}
+        max={8}
+        step={0.25}
+        inputMin={1}
+        inputMax={30}
+        inputStep={0.1}
+        unit="s"
+        onChange={(s) => onDuration(Math.round(s * 1000))}
+      />
     </section>
   )
 }
@@ -474,86 +619,201 @@ function NormalizeSetting({ value, onChange }: { value: NormalizeMode; onChange:
   )
 }
 
-/** Disk budget for downloaded songs, plus what is on disk right now. */
-function SongCache({ maxGb, onChange }: { maxGb: number; onChange: (v: number) => void }) {
-  const [used, setUsed] = useState<{ bytes: number; count: number }>()
-  const refresh = useCallback((): void => {
-    void window.sonora.cache.stats().then(setUsed)
-  }, [])
-  useEffect(refresh, [refresh])
+const downloadStats = (): Promise<CacheStats> => window.sonora.downloads.stats()
+
+/** Everything kept for offline listening, how far each has got, and a way to let it go. */
+function DownloadsSection() {
+  const list = useDownloads()
+  const used = useCacheStats(downloadStats)
+  const open = (d: DownloadStatus): void =>
+    nav.go(d.kind === 'playlist' ? { name: 'playlist', id: d.id } : { name: 'savedMix', id: d.id })
+
+  return (
+    <section className="mb-8">
+      <SectionHeader
+        title="Downloads"
+        action={
+          list.length > 0 && (
+            <GhostButton onClick={() => list.forEach((d) => void downloads.remove(d.key))}>Remove all</GhostButton>
+          )
+        }
+      />
+      <p className="mb-3 px-3 text-xs text-ink-3">
+        Playlists and mixes you download play with no connection at all, and are not counted against the song cache.
+        Downloaded playlists pick up songs added on the server the next time Sonora can reach it. Plays made offline
+        are sent to the server once it answers again, so its play counts stay right.
+      </p>
+      <div className="px-3 pb-2 text-xs text-ink-2">
+        {used ? `${formatBytes(used.bytes)} for ${plural(used.count, 'song')}` : '…'}
+      </div>
+      {list.length === 0 ? (
+        <div className="px-3 py-2 text-xs text-ink-3">
+          Nothing yet. Use the download button on a playlist or mix to keep it here.
+        </div>
+      ) : (
+        <ul>
+          {list.map((d) => {
+            const total = d.trackIds.length
+            return (
+              <li key={d.key} className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-white/[0.04]">
+                <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => open(d)}>
+                  <Cover id={d.coverArt} size={100} className="h-10 w-10 shrink-0" rounded="rounded" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{d.title}</span>
+                    <span className="block text-xs text-ink-2">
+                      {d.kind === 'playlist' ? 'Playlist' : 'Mix'} {'·'}{' '}
+                      {d.done >= total ? plural(total, 'song') : `${d.done} of ${plural(total, 'song')}`}
+                      {d.failed > 0 && <span className="text-red-400"> {'·'} {d.failed} failed, retried later</span>}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  className="shrink-0 rounded p-1 text-ink-3 hover:bg-white/10 hover:text-ink"
+                  title="Remove download"
+                  onClick={() => void downloads.remove(d.key)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+const songStats = (): Promise<CacheStats> => window.sonora.cache.stats()
+const artStats = (): Promise<CacheStats> => window.sonora.art.stats()
+const metaStats = (): Promise<CacheStats> => window.sonora.meta.stats()
+
+/** How a bitrate sounds next to the lossless original, for the line under the slider. */
+function opusQuality(kbps: number): string {
+  if (kbps < 96) return 'Small, but the loss is audible on good headphones'
+  if (kbps < 128) return 'Fine for casual listening'
+  if (kbps < 160) return 'Close to the original for most listening'
+  return 'Indistinguishable from the original for most listeners'
+}
+
+/** Disk budget and compression for downloaded songs, plus what is on disk right now. */
+function SongCache({
+  settings,
+  onChange
+}: {
+  settings: Pick<Settings, 'cacheMaxGb' | 'cacheCompress' | 'cacheCompressKbps'>
+  onChange: (patch: SettingsPatch) => void
+}) {
+  const used = useCacheStats(songStats)
+  const { cacheMaxGb: maxGb, cacheCompress: compress, cacheCompressKbps: kbps } = settings
 
   return (
     <section className="mb-8">
       <SectionHeader
         title="Song cache"
-        action={
-          <GhostButton onClick={() => void window.sonora.cache.clear().then(refresh)}>Clear cache</GhostButton>
-        }
+        action={<GhostButton onClick={() => void window.sonora.cache.clear()}>Clear cache</GhostButton>}
       />
       <p className="mb-3 px-3 text-xs text-ink-3">
         Songs you play are kept on disk and reused next time. Playback starts streaming straight away and moves over
         to the local copy as soon as it has downloaded. Once the limit is reached, the songs played longest ago are
         deleted first.
       </p>
-      <label className="flex items-center justify-between gap-6 px-3 py-3">
-        <div>
-          <div className="text-sm font-medium">Disk limit</div>
-          <div className="text-xs text-ink-2">
-            {maxGb === 0 ? 'Off \u2014 nothing is kept on disk' : `${maxGb} GB`}
-            {used && ` \u00b7 ${(used.bytes / 1024 ** 3).toFixed(2)} GB used by ${used.count} songs`}
-          </div>
-        </div>
-        <Range
-          className="w-40"
-          min={0}
-          max={50}
-          step={1}
-          value={maxGb}
-          onChange={(e) => onChange(Number(e.target.value))}
-          onMouseUp={refresh}
+      <SliderRow
+        label="Disk limit"
+        description={
+          <>
+            {maxGb === 0 ? 'Off — nothing is kept on disk' : `${maxGb} GB`}
+            {used && ` · ${formatBytes(used.bytes)} used by ${plural(used.count, 'song')}`}
+          </>
+        }
+        value={maxGb}
+        min={0}
+        max={50}
+        step={1}
+        inputMax={4096}
+        inputStep={0.1}
+        unit="GB"
+        onChange={(cacheMaxGb) => onChange({ cacheMaxGb })}
+      />
+      <Toggle
+        label="Compress lossless songs"
+        description="FLAC and WAV files are re-encoded to Opus in the background once they have downloaded, at a fraction of the size. Songs that are already MP3, AAC or Opus are kept as they are."
+        checked={compress}
+        onChange={(cacheCompress) => onChange({ cacheCompress })}
+      />
+      {compress && (
+        <SliderRow
+          label="Compression quality"
+          description={`${opusQuality(kbps)} · about ${((kbps * 60) / 8 / 1000).toFixed(1)} MB a minute`}
+          value={kbps}
+          min={64}
+          max={320}
+          step={32}
+          inputMin={32}
+          inputMax={512}
+          inputStep={1}
+          unit="kbps"
+          onChange={(cacheCompressKbps) => onChange({ cacheCompressKbps })}
         />
-      </label>
+      )}
     </section>
   )
 }
 
 /** Disk budget for cover art, plus what is on disk right now. */
 function ImageCache({ maxMb, onChange }: { maxMb: number; onChange: (v: number) => void }) {
-  const [used, setUsed] = useState<{ bytes: number; count: number }>()
-  const refresh = useCallback((): void => {
-    void window.sonora.art.stats().then(setUsed)
-  }, [])
-  useEffect(refresh, [refresh])
+  const used = useCacheStats(artStats)
 
   return (
     <section className="mb-8">
       <SectionHeader
         title="Image cache"
-        action={<GhostButton onClick={() => void window.sonora.art.clear().then(refresh)}>Clear cache</GhostButton>}
+        action={<GhostButton onClick={() => void window.sonora.art.clear()}>Clear cache</GhostButton>}
       />
       <p className="mb-3 px-3 text-xs text-ink-3">
-        Cover art is downloaded once and kept on disk, so pages you have already seen paint instantly on the next
-        visit and still show their artwork with the server unreachable. Once the limit is reached, the covers shown
-        longest ago are deleted first. Turning this off loads every cover from the server each time.
+        Cover art is downloaded once and kept on disk, compressed to WebP, so pages you have already seen paint
+        instantly on the next visit and still show their artwork with the server unreachable. Once the limit is reached,
+        the covers shown longest ago are deleted first. Turning this off loads every cover from the server each time.
       </p>
-      <label className="flex items-center justify-between gap-6 px-3 py-3">
-        <div>
-          <div className="text-sm font-medium">Disk limit</div>
-          <div className="text-xs text-ink-2">
-            {maxMb === 0 ? 'Off \u2014 covers load from the server every time' : `${maxMb} MB`}
-            {used && ` \u00b7 ${(used.bytes / 1024 ** 2).toFixed(0)} MB used by ${used.count} covers`}
-          </div>
+      <SliderRow
+        label="Disk limit"
+        description={
+          <>
+            {maxMb === 0 ? 'Off — covers load from the server every time' : `${maxMb} MB`}
+            {used && ` · ${formatBytes(used.bytes)} used by ${plural(used.count, 'cover')}`}
+          </>
+        }
+        value={maxMb}
+        min={0}
+        max={2048}
+        step={64}
+        inputMax={65536}
+        inputStep={1}
+        unit="MB"
+        onChange={onChange}
+      />
+    </section>
+  )
+}
+
+/** The library responses views paint from before the server answers. */
+function LibraryCache() {
+  const used = useCacheStats(metaStats)
+  return (
+    <section className="mb-8">
+      <SectionHeader
+        title="Library cache"
+        action={<GhostButton onClick={() => void clearCache()}>Clear cache</GhostButton>}
+      />
+      <p className="mb-3 px-3 text-xs text-ink-3">
+        Album lists, artists, playlists and the pages you open are kept on disk, compressed, so they show up instantly
+        with what was there last time while Sonora checks the server for anything new.
+      </p>
+      <div className="px-3 py-3">
+        <div className="text-sm font-medium">On disk</div>
+        <div className="text-xs text-ink-2">
+          {used ? `${formatBytes(used.bytes)} for ${plural(used.count, 'page')} and lists` : '…'}
         </div>
-        <Range
-          className="w-40"
-          min={0}
-          max={2048}
-          step={64}
-          value={maxMb}
-          onChange={(e) => onChange(Number(e.target.value))}
-          onMouseUp={refresh}
-        />
-      </label>
+      </div>
     </section>
   )
 }
@@ -573,7 +833,8 @@ export function SettingsView() {
     update({ widgets: { ...settings.widgets, [key]: value } })
 
   return (
-    <div className="max-w-2xl">
+    // Centred and capped, so the rows' controls stay within reach of their labels on a wide window.
+    <div className="mx-auto w-full max-w-3xl">
       <PageTitle title="Settings" subtitle={`Signed in as ${session?.username} · ${session?.server}`} />
 
       <section className="mb-8">
@@ -631,9 +892,13 @@ export function SettingsView() {
         />
       </section>
 
-      <SongCache maxGb={settings.cacheMaxGb} onChange={(cacheMaxGb) => update({ cacheMaxGb })} />
+      <DownloadsSection />
+
+      <SongCache settings={settings} onChange={update} />
 
       <ImageCache maxMb={settings.artCacheMaxMb} onChange={(artCacheMaxMb) => update({ artCacheMaxMb })} />
+
+      <LibraryCache />
 
       <section className="mb-8">
         <SectionHeader title="Behaviour" />

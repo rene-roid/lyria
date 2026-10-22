@@ -11,7 +11,7 @@ let maxGb = 1 / 1024 // a 1 MB budget
 mock.module('electron', () => ({ app: { getPath: () => userData }, net: {}, protocol: {} }))
 mock.module('../src/main/store', () => ({ getSettings: () => ({ cacheMaxGb: maxGb }) }))
 mock.module('../src/main/credentials', () => ({ loadSession: () => ({ username: 'u' }) }))
-const { bytes, evict, stats } = await import('../src/main/audioCache')
+const { bytes, evict, isLossless, stats } = await import('../src/main/audioCache')
 
 const KB = 1024
 const put = (name: string, size: number, ageMinutes: number): void => {
@@ -59,4 +59,14 @@ test('a budget of zero disables caching entirely', async () => {
   maxGb = 0
   globalThis.fetch = (async () => new Response(Buffer.alloc(KB))) as unknown as typeof fetch
   expect(await bytes('song-2', 'http://server/rest/stream')).toBeNull()
+})
+
+test('only FLAC and WAV count as lossless, an ID3 tag in front of FLAC included', () => {
+  const id3 = Buffer.concat([Buffer.from('ID3'), Buffer.from([4, 0, 0, 0, 0, 0, 5]), Buffer.alloc(5), Buffer.from('fLaC')])
+  expect(isLossless(Buffer.from('fLaC\0\0\0\x22'))).toBe(true)
+  expect(isLossless(id3)).toBe(true)
+  expect(isLossless(Buffer.from('RIFF\0\0\0\0WAVEfmt '))).toBe(true)
+  expect(isLossless(Buffer.from('ID3\x04\0\0\0\0\0\0\xff\xfb'))).toBe(false) // MP3
+  expect(isLossless(Buffer.from('OggS\0\x02'))).toBe(false)
+  expect(isLossless(Buffer.from('RIFF\0\0\0\0AVI '))).toBe(false)
 })

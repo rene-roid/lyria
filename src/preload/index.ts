@@ -2,6 +2,9 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { release } from 'node:os'
 import { supportsNativeAcrylic } from '@shared/types'
 import type {
+  Download,
+  DownloadStatus,
+  HostJob,
   PlayerCommandName,
   PlayerCommands,
   PlayerEventName,
@@ -61,6 +64,16 @@ const api = {
     },
     onFramesWanted(cb: (wanted: boolean) => void): Unsubscribe {
       return subscribe('host:framesWanted', cb)
+    },
+    /** Re-encoding for the disk caches; whatever `run` resolves with goes back to main. */
+    onJob(run: (job: HostJob, body: Uint8Array) => Promise<Uint8Array | null>): Unsubscribe {
+      const handler = (_e: IpcRendererEvent, id: number, job: HostJob, body: Uint8Array): void => {
+        void run(job, body)
+          .catch(() => null)
+          .then((result) => ipcRenderer.send('host:jobDone', id, result))
+      }
+      ipcRenderer.on('host:job', handler)
+      return () => ipcRenderer.removeListener('host:job', handler)
     }
   },
 
@@ -109,11 +122,59 @@ const api = {
     want(id: string, url: string): Promise<Uint8Array | null> {
       return ipcRenderer.invoke('cache:want', id, url)
     },
+    /** The downloaded or cached copy, without going to the server. Null when there is none. */
+    local(id: string): Promise<Uint8Array | null> {
+      return ipcRenderer.invoke('cache:local', id)
+    },
+    /** A play that counts, for the server's play counts; main holds it while the server is away. */
+    played(id: string, time: number): void {
+      ipcRenderer.send('cache:played', id, time)
+    },
     stats(): Promise<{ bytes: number; count: number }> {
       return ipcRenderer.invoke('cache:stats')
     },
     clear(): Promise<void> {
       return ipcRenderer.invoke('cache:clear')
+    }
+  },
+
+  /** Playlists and saved mixes kept on disk for listening offline. */
+  downloads: {
+    list(): Promise<DownloadStatus[]> {
+      return ipcRenderer.invoke('downloads:list')
+    },
+    add(download: Omit<Download, 'addedAt'>): Promise<void> {
+      return ipcRenderer.invoke('downloads:add', download)
+    },
+    remove(key: string): Promise<void> {
+      return ipcRenderer.invoke('downloads:remove', key)
+    },
+    stats(): Promise<{ bytes: number; count: number }> {
+      return ipcRenderer.invoke('downloads:stats')
+    },
+    onChange(cb: (list: DownloadStatus[]) => void): Unsubscribe {
+      return subscribe('downloads:changed', cb)
+    }
+  },
+
+  /** Library responses kept on disk so views paint before the server answers. See renderer/shared/cache. */
+  meta: {
+    load(): Promise<{ scope: string; entries: [string, string][] }> {
+      return ipcRenderer.invoke('meta:load')
+    },
+    /** Who the entries belong to; a different account wipes them. */
+    setScope(scope: string): void {
+      ipcRenderer.send('meta:setScope', scope)
+    },
+    /** A null value drops the entry. */
+    put(key: string, value: string | null): void {
+      ipcRenderer.send('meta:put', key, value)
+    },
+    stats(): Promise<{ bytes: number; count: number }> {
+      return ipcRenderer.invoke('meta:stats')
+    },
+    clear(): Promise<void> {
+      return ipcRenderer.invoke('meta:clear')
     }
   },
 

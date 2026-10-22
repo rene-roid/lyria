@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { ART_SCHEME, ART_SIZE, artIdFromUrl } from '@shared/art'
 import { SubsonicClient } from '@shared/subsonic/client'
 import { loadSession } from './credentials'
+import { Shrinker } from './shrink'
 import { getSettings } from './store'
 
 /**
@@ -17,6 +18,9 @@ import { getSettings } from './store'
  *
  * The `artCacheMaxMb` setting is the disk budget; the least recently shown file goes first when it
  * is reached. A budget of 0 turns the cache off, and the windows then load covers off the server.
+ *
+ * Covers are kept as WebP: each one is served as it came the first time, then re-encoded in the
+ * background and swapped for the smaller file.
  */
 
 const MB = 1024 * 1024
@@ -90,6 +94,27 @@ async function download(id: string): Promise<string | null> {
 
 const isImage = (b: Buffer): boolean => contentType(b) !== 'application/octet-stream'
 
+/** Re-encodes a cover to WebP. Main sets it up once the audio host exists. */
+type Compressor = (body: Buffer) => Promise<Buffer | null>
+let compressor: Compressor | undefined
+
+export function setCompressor(fn: Compressor): void {
+  compressor = fn
+}
+
+const shrinker = new Shrinker({
+  // A GIF may be animated, and drawing it to re-encode would keep only its first frame.
+  wants: (b) => isImage(b) && !['image/webp', 'image/gif'].includes(contentType(b)),
+  encoder: () => compressor,
+  ratio: 0.95
+})
+
+/** Re-encode the covers cached before they were kept as WebP, most recently shown first. */
+export async function compressAll(): Promise<void> {
+  const all = await entries()
+  await shrinker.sweep(all.sort((a, b) => b.used - a.used).map((e) => e.file))
+}
+
 /** Content type off the file's own magic bytes; the server's header is not kept with the file. */
 function contentType(b: Buffer): string {
   if (b[0] === 0xff && b[1] === 0xd8) return 'image/jpeg'
@@ -124,6 +149,7 @@ export function registerArtProtocol(): void {
         await rm(file, { force: true })
         return new Response(null, { status: 404 })
       }
+      void shrinker.shrink(file, body)
       return new Response(new Uint8Array(body.buffer, body.byteOffset, body.byteLength), {
         // Allowed anywhere, so a page can read a cover's pixels back for its header colour.
         headers: {
@@ -183,5 +209,6 @@ export async function stats(): Promise<{ bytes: number; count: number }> {
 
 export function clear(): Promise<void> {
   sinceEvict = 0
+  shrinker.reset()
   return rm(dir(), { recursive: true, force: true })
 }

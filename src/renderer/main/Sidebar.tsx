@@ -1,4 +1,5 @@
 import {
+  ArrowDown,
   ChevronLeft,
   ChevronRight,
   Disc3,
@@ -15,13 +16,14 @@ import {
   Volume2
 } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { viewKey } from '@shared/types'
+import { downloadKey, viewKey } from '@shared/types'
 import { MIX_SECTIONS } from '@shared/navimix'
 import { Cover } from '@renderer/shared/Cover'
 import { useClient } from '@renderer/shared/sessionStore'
 import { nav, useNav, type View } from './nav'
 import { playlists, savedFirst, useSavedPlaylists, useServerPlaylists } from './playlists'
 import { useSavedMixes } from './savedMixes'
+import { useDownload } from './downloads'
 import { allAlbums } from './albumList'
 import { useAsync } from './useAsync'
 import { usePlayingState } from './recents'
@@ -61,6 +63,10 @@ function LibraryRow({
 }) {
   const active = useNav((s) => viewKey(s.view) === viewKey(view))
   const { current, playing } = usePlayingState(viewKey(view))
+  const download = useDownload(
+    view.name === 'playlist' ? downloadKey('playlist', view.id) : view.name === 'savedMix' ? downloadKey('mix', view.id) : ''
+  )
+  const downloaded = download && download.done >= download.trackIds.length
   return (
     <button
       onClick={() => nav.go(view)}
@@ -77,6 +83,16 @@ function LibraryRow({
         </div>
         <div className="flex items-center gap-1 text-[13px] text-ink-2">
           {saved && <Heart size={12} fill="currentColor" className="shrink-0 text-accent" aria-label="Saved" />}
+          {download && (
+            <span
+              className={`flex h-3 w-3 shrink-0 items-center justify-center rounded-full ${
+                downloaded ? 'bg-accent text-black' : 'border border-ink-3 text-ink-3'
+              }`}
+              aria-label={downloaded ? 'Downloaded' : 'Downloading'}
+            >
+              <ArrowDown size={9} strokeWidth={3} />
+            </span>
+          )}
           <span className="truncate">{subtitle}</span>
         </div>
       </div>

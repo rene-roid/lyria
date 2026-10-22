@@ -228,6 +228,34 @@ export function saveMix(mixes: SavedMix[], mix: SavedMix): SavedMix[] {
 
 export type WindowName = 'main' | 'host' | 'toast' | 'mini' | 'widget'
 
+/**
+ * A playlist or saved mix kept on disk for listening offline. A playlist follows the server: its
+ * lineup is refreshed on launch and new songs download. A saved mix is frozen, so it never changes.
+ */
+export interface Download {
+  /** `playlist:<id>` or `mix:<id>`. */
+  key: string
+  kind: 'playlist' | 'mix'
+  id: string
+  title: string
+  trackIds: string[]
+  /** Cover shown in the downloads list. */
+  coverArt?: string
+  addedAt: number
+}
+
+/** A download plus how far its songs have got. */
+export interface DownloadStatus extends Download {
+  done: number
+  /** Songs that would not download this session; they are tried again on the next sync. */
+  failed: number
+}
+
+export const downloadKey = (kind: Download['kind'], id: string): string => `${kind}:${id}`
+
+/** Re-encoding main hands to the audio host for the on-disk caches. */
+export type HostJob = { kind: 'opus'; kbps: number } | { kind: 'webp' }
+
 export interface Rect {
   x: number
   y: number
@@ -381,6 +409,10 @@ export interface Settings {
   recents: RecentItem[]
   /** Disk budget for cached songs, in GB. 0 turns caching off. */
   cacheMaxGb: number
+  /** Re-encode cached lossless songs to Opus so they take less room on disk. */
+  cacheCompress: boolean
+  /** Opus bitrate for compressed songs, in kbps. */
+  cacheCompressKbps: number
   /** Disk budget for cached cover art, in MB. 0 turns it off and covers load off the server. */
   artCacheMaxMb: number
   /** Mixes the user kept, newest first. */
@@ -410,6 +442,8 @@ export const defaultSettings: Settings = {
   resume: null,
   recents: [],
   cacheMaxGb: 5,
+  cacheCompress: true,
+  cacheCompressKbps: 160,
   artCacheMaxMb: 256,
   savedMixes: [],
   savedPlaylists: [],

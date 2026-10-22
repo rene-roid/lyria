@@ -3,12 +3,17 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, readdir, rename, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { loadSession } from './credentials'
+import { Shrinker } from './shrink'
 import { getSettings } from './store'
 
 /**
  * On-disk cache of played songs, kept under the configured budget by deleting the
  * least recently played file first. The audio host streams from the server immediately
  * and swaps over to the cached copy once it lands.
+ *
+ * With compression on, lossless files are then re-encoded to Opus in the background and the
+ * original on disk is swapped for the smaller copy. Lossy files are kept as they came: encoding
+ * them again would cost quality for little space.
  */
 
 const GB = 1024 ** 3
@@ -17,10 +22,16 @@ function dir(): string {
   return join(app.getPath('userData'), 'audio-cache')
 }
 
-/** Keyed per account, so two libraries that reuse the same track ids never share a file. */
-function fileFor(id: string): string {
-  const key = `${loadSession()?.username ?? ''}|${id}`
-  return join(dir(), createHash('sha1').update(key).digest('hex'))
+/**
+ * A song's file name, shared with the downloads folder. Keyed per account, so two libraries that
+ * reuse the same track ids never share a file.
+ */
+export function songName(id: string): string {
+  return createHash('sha1').update(`${loadSession()?.username ?? ''}|${id}`).digest('hex')
+}
+
+export function fileFor(id: string): string {
+  return join(dir(), songName(id))
 }
 
 function budget(): number {
@@ -83,11 +94,89 @@ async function download(id: string, url: string): Promise<string | null> {
 export async function bytes(id: string, url: string): Promise<Buffer | null> {
   const file = await ensure(id, url)
   if (!file) return null
+  return read(file)
+}
+
+/** Bytes of the cached copy if there is one, without going to the server for it. */
+export async function cached(id: string): Promise<Buffer | null> {
+  const file = fileFor(id)
   try {
-    return await readFile(file)
+    const now = new Date()
+    await utimes(file, now, now)
   } catch {
     return null
   }
+  return read(file)
+}
+
+async function read(file: string): Promise<Buffer | null> {
+  try {
+    const body = await readFile(file)
+    void shrinker.shrink(file, body)
+    return body
+  } catch {
+    return null
+  }
+}
+
+/** Take a file over from elsewhere (a download being removed), as if the song had just been played. */
+export async function adopt(id: string, from: string): Promise<void> {
+  if (budget() <= 0) return void (await rm(from, { force: true }))
+  await mkdir(dir(), { recursive: true })
+  await rename(from, fileFor(id))
+  const now = new Date()
+  await utimes(fileFor(id), now, now)
+}
+
+/** Hand a cached song over to the downloads folder instead of fetching it again. */
+export async function release(id: string, to: string): Promise<boolean> {
+  try {
+    await rename(fileFor(id), to)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const ascii = (b: Uint8Array, at: number, n: number): string => Buffer.from(b.subarray(at, at + n)).toString('latin1')
+
+/** FLAC or WAV, off the first bytes. FLAC may carry an ID3v2 tag in front of its own marker. */
+export function isLossless(b: Uint8Array): boolean {
+  let at = 0
+  if (ascii(b, 0, 3) === 'ID3' && b.length >= 10) {
+    at = 10 + (((b[6] & 0x7f) << 21) | ((b[7] & 0x7f) << 14) | ((b[8] & 0x7f) << 7) | (b[9] & 0x7f))
+  }
+  return ascii(b, at, 4) === 'fLaC' || (ascii(b, at, 4) === 'RIFF' && ascii(b, at + 8, 4) === 'WAVE')
+}
+
+/** Re-encodes a song to Opus at the given bitrate. Main sets it up once the audio host exists. */
+type Compressor = (body: Buffer, kbps: number) => Promise<Buffer | null>
+let compressor: Compressor | undefined
+
+export function setCompressor(fn: Compressor): void {
+  compressor = fn
+}
+
+/** The Opus encoder at the chosen bitrate, or undefined while compression is off. */
+export function songEncoder(): ((body: Buffer) => Promise<Buffer | null>) | undefined {
+  const { cacheCompress, cacheCompressKbps } = getSettings()
+  const fn = compressor
+  return fn && cacheCompress && cacheCompressKbps > 0 ? (body) => fn(body, cacheCompressKbps) : undefined
+}
+
+/**
+ * Lossless audio as Opus comes out at a fifth of its size or less; one that barely shrinks was
+ * most likely near-silence or not what its header claimed, and is left as it is.
+ */
+export const SONG_RATIO = 0.8
+
+const shrinker = new Shrinker({ wants: isLossless, encoder: songEncoder, ratio: SONG_RATIO })
+
+/** Compress what was cached before compression was on, or at another setting, most recent first. */
+export async function compressAll(): Promise<void> {
+  shrinker.reset()
+  const all = await entries()
+  await shrinker.sweep(all.sort((a, b) => b.used - a.used).map((e) => e.file))
 }
 
 type Entry = { file: string; size: number; used: number }
@@ -135,5 +224,6 @@ export async function stats(): Promise<{ bytes: number; count: number }> {
 
 export function clear(): Promise<void> {
   sinceEvict = 0
+  shrinker.reset()
   return rm(dir(), { recursive: true, force: true })
 }
