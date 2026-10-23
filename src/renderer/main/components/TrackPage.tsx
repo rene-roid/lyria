@@ -3,6 +3,7 @@ import { Shuffle } from 'lucide-react'
 import type { RecentItem, Track } from '@shared/types'
 import { filterTracks, formatDuration } from '@shared/format'
 import { player } from '@renderer/shared/playerStore'
+import { useNoneOnDevice } from '../offline'
 import { playFrom } from '../recents'
 import type { AsyncState } from '../useAsync'
 import { TrackList } from './TrackList'
@@ -37,6 +38,7 @@ export function TrackPage({
   const [query, setQuery] = useState('')
   const songs = state.data
   const shown = useMemo(() => filterTracks(songs ?? [], query), [songs, query])
+  const unplayable = useNoneOnDevice(songs)
 
   if (state.loading) return <Loading />
   if (state.error) return <ErrorBox message={state.error} onRetry={state.reload} />
@@ -52,12 +54,12 @@ export function TrackPage({
         cover={cover}
         subtitle={`${songs.length} song${songs.length === 1 ? '' : 's'}, ${formatDuration(total)}`}
         search={{ value: query, onChange: setQuery, placeholder: `Search in this ${eyebrow.toLowerCase()}` }}
-        play={{ onClick: () => playFrom(songs, 0, origin), disabled: !songs.length, from: origin.key }}
+        play={{ onClick: () => playFrom(songs, 0, origin), disabled: !songs.length || unplayable, from: origin.key }}
         actions={
           <>
             <ActionIcon
               title="Shuffle"
-              disabled={!songs.length}
+              disabled={!songs.length || unplayable}
               onClick={() => {
                 player.setShuffle(true)
                 playFrom(songs, Math.floor(Math.random() * songs.length), origin)

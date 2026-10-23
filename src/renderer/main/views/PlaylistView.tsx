@@ -12,17 +12,21 @@ import { playlistRecent, toggleSavedPlaylist, useSavedPlaylists } from '../playl
 import { ServerMixCover } from '../components/MixCover'
 import { useAsync } from '../useAsync'
 import { DownloadButton } from '../components/DownloadButton'
-import { downloads, useDownload } from '../downloads'
+import { downloads, loadPlaylist, useDownload } from '../downloads'
+import { useNoneOnDevice, useOffline } from '../offline'
 import { downloadKey } from '@shared/types'
 
 export function PlaylistView({ id }: { id: string }) {
   const client = useClient()
-  const state = useAsync(`playlist:${id}`, () => client?.getPlaylist(id), [client, id])
+  const offline = useOffline()
+  // Offline in the deps, so a download's kept copy shows when the server goes and the live one on its return.
+  const state = useAsync(`playlist:${id}`, () => (client ? loadPlaylist(client, id) : undefined), [client, id, offline])
   const coverColor = useCoverColor(state.data?.coverArt ?? state.data?.entry[0]?.coverArt)
   const saved = useSavedPlaylists().includes(id)
   const download = useDownload(downloadKey('playlist', id))
   const [query, setQuery] = useState('')
   const shown = useMemo(() => filterTracks(state.data?.entry ?? [], query), [state.data, query])
+  const unplayable = useNoneOnDevice(state.data?.entry)
 
   if (state.loading) return <Loading />
   if (state.error) return <ErrorBox message={state.error} onRetry={state.reload} />
@@ -57,12 +61,12 @@ export function PlaylistView({ id }: { id: string }) {
           </span>
         }
         search={{ value: query, onChange: setQuery, placeholder: 'Search in this playlist' }}
-        play={{ onClick: () => playFrom(songs, 0, origin), disabled: !songs.length, from: origin.key }}
+        play={{ onClick: () => playFrom(songs, 0, origin), disabled: !songs.length || unplayable, from: origin.key }}
         actions={
           <>
             <ActionIcon
               title="Shuffle"
-              disabled={!songs.length}
+              disabled={!songs.length || unplayable}
               onClick={() => {
                 player.setShuffle(true)
                 playFrom(songs, Math.floor(Math.random() * songs.length), origin)
@@ -91,8 +95,8 @@ export function PlaylistView({ id }: { id: string }) {
         tracks={shown}
         origin={origin}
         removeLabel="Remove from this playlist"
-        // A mix is rewritten by its plugin, so an edit to it would not last.
-        onRemove={mix ? undefined : async (i) => {
+        // A mix is rewritten by its plugin, so an edit to it would not last; offline, there is no one to tell.
+        onRemove={mix || offline ? undefined : async (i) => {
           if (!client) return
           // `i` counts the filtered rows; the server wants the song's place in the whole playlist.
           await client.updatePlaylist(id, { songIndexToRemove: [songs.indexOf(shown[i])] })

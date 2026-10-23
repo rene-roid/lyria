@@ -8,7 +8,7 @@ const session = { server: 'http://server', username: 'u', token: 't', salt: 's' 
 
 // Same export names as the other tests' electron mocks; see audioCache.test.
 mock.module('electron', () => ({ app: { getPath: () => userData }, net: {}, protocol: {} }))
-mock.module('../src/main/credentials', () => ({ loadSession: () => session }))
+mock.module('../src/main/credentials', () => ({ loadSession: () => session, saveSession: () => {} }))
 const { flush, submit } = await import('../src/main/scrobbles')
 
 let online = false
