@@ -1,8 +1,9 @@
 import { migrated } from './migrate'
-import { app, BrowserWindow, globalShortcut, nativeTheme, screen, session } from 'electron'
+import { app, BrowserWindow, globalShortcut, nativeTheme, powerMonitor, screen, session } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import * as artCache from './artCache'
 import * as audioCache from './audioCache'
+import * as connection from './connection'
 import * as downloads from './downloads'
 import { runInHost, setupHostJobs } from './hostJobs'
 import { setupIpc, setPlayerHooks, sendCommand, playerState } from './ipc'
@@ -107,11 +108,14 @@ app.whenReady().then(() => {
     void artCache.compressAll().then(() => audioCache.compressAll())
   }, SWEEP_DELAY_MS)
   // Plays held back while offline go out first, then downloads catch up with the server.
-  void scrobbles.flush().finally(() => void downloads.sync())
-  setInterval(() => {
-    void scrobbles.flush()
-    void downloads.sync()
-  }, DOWNLOAD_SYNC_MS)
+  const catchUp = (): void => void scrobbles.flush().finally(() => void downloads.sync())
+  catchUp()
+  setInterval(catchUp, DOWNLOAD_SYNC_MS)
+  // Back from offline: no reason to sit on held plays and missing songs until the next round.
+  connection.onChange((online, before) => online && before === false && catchUp())
+  connection.start()
+  // A machine waking from sleep has usually changed networks, or lost and regained one.
+  powerMonitor.on('resume', () => void connection.check())
 
   const settings = getSettings()
   const startHidden = process.argv.includes('--hidden')

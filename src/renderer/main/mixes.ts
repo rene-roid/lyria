@@ -26,6 +26,9 @@ export interface MixSeed {
   value: string
 }
 
+/** Where a mix's page caches today's lineup. */
+export const mixKey = (seed: MixSeed): string => `mix:${seed.kind}:${seed.value}`
+
 /** Views persisted before mixes grew past genres carry no kind. */
 export const seedOfView = (v: Extract<View, { name: 'mix' }>): MixSeed => ({
   kind: v.kind ?? 'genre',

@@ -50,7 +50,10 @@ function load(): Promise<Map<string, string>> {
 }
 
 export async function all(): Promise<{ scope: string; entries: [string, string][] }> {
-  return { scope, entries: [...(await load())] }
+  // Loaded before `scope` is read: on the first call it is still blank until the file is in, and a
+  // blank scope makes the window take its own cache for another account's and throw it all away.
+  const m = await load()
+  return { scope, entries: [...m] }
 }
 
 /** Wipe the entries when they belong to another account than `next`, so libraries never mix. */

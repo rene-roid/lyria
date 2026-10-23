@@ -6,6 +6,7 @@ import { player } from '@renderer/shared/playerStore'
 import { AlbumCard, ArtistCard, CardGrid, LikedCover } from '../components/AlbumCard'
 import { TrackList } from '../components/TrackList'
 import { ActionIcon, Empty, ErrorBox, Loading, PageTitle, SectionHeader } from '../components/ui'
+import { useNoneOnDevice } from '../offline'
 import { playFrom } from '../recents'
 import { useAsync } from '../useAsync'
 
@@ -17,6 +18,7 @@ export function Favorites() {
   const client = useClient()
   const username = useSessionStore((s) => s.session?.username)
   const state = useAsync('starred', () => client?.getStarred2(), [client])
+  const unplayable = useNoneOnDevice(state.data?.songs)
   if (state.loading) return <Loading />
   if (state.error) return <ErrorBox message={state.error} onRetry={state.reload} />
   const r = state.data
@@ -37,12 +39,12 @@ export function Favorites() {
             {songs.length > 0 && `, ${formatDuration(total)}`}
           </span>
         }
-        play={{ onClick: () => playFrom(songs, 0, null, LIKED), disabled: !songs.length, from: LIKED }}
+        play={{ onClick: () => playFrom(songs, 0, null, LIKED), disabled: !songs.length || unplayable, from: LIKED }}
         actions={
           <>
             <ActionIcon
               title="Shuffle"
-              disabled={!songs.length}
+              disabled={!songs.length || unplayable}
               onClick={() => {
                 player.setShuffle(true)
                 playFrom(songs, Math.floor(Math.random() * songs.length), null, LIKED)

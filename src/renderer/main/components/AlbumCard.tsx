@@ -9,8 +9,9 @@ import { parseDiscName } from '@shared/format'
 import { Cover } from '@renderer/shared/Cover'
 import { useClient } from '@renderer/shared/sessionStore'
 import { nav, type View } from '../nav'
-import { albumRecent, playFrom, usePlayingState } from '../recents'
+import { albumRecent, albumSongs, playFrom, usePlayingState } from '../recents'
 import { playlistRecent } from '../playlists'
+import { loadPlaylist } from '../downloads'
 import { ServerMixCover } from './MixCover'
 import { SectionHeader } from './ui'
 
@@ -88,8 +89,7 @@ export function AlbumCard({ album, discIds }: { album: AlbumID3; discIds?: strin
   const ids = [album.id, ...(discIds ?? [])]
   const playAlbum = async (): Promise<void> => {
     if (!client) return
-    const albums = await Promise.all(ids.map((i) => client.getAlbum(i)))
-    playFrom(albums.flatMap((a) => a.song), 0, albumRecent(album, discIds))
+    playFrom(await albumSongs(client, ids), 0, albumRecent(album, discIds))
   }
   return (
     <Card
@@ -133,7 +133,7 @@ export function PlaylistCard({ playlist: p }: { playlist: Playlist }) {
       onOpen={() => nav.go({ name: 'playlist', id: p.id })}
       from={viewKey({ name: 'playlist', id: p.id })}
       onPlay={async () => {
-        const songs = client ? (await client.getPlaylist(p.id)).entry : []
+        const songs = client ? (await loadPlaylist(client, p.id)).entry : []
         if (songs.length) playFrom(songs, 0, playlistRecent(p))
       }}
     />

@@ -7,7 +7,9 @@ import { player, usePlayerState } from '@renderer/shared/playerStore'
 import { useSessionStore } from '@renderer/shared/sessionStore'
 import { mapLimit } from '@shared/async'
 import { allAlbums } from './albumList'
-import { ALBUM_FETCH_LIMIT, buildMix, seedOfView } from './mixes'
+import { ALBUM_FETCH_LIMIT, buildMix, mixKey, seedOfView } from './mixes'
+import { loadPlaylist } from './downloads'
+import { cachedOr } from './offline'
 import { findSavedMix } from './savedMixes'
 
 /** Describe a page for the shelf. Call sites pass this as the origin of a play. */
@@ -72,32 +74,58 @@ export async function artistTracks(c: SubsonicClient, artist: ArtistID3 & { albu
   return [...songs, ...credited.filter((t) => !ids.has(t.id))]
 }
 
-/** Re-fetch what a shelf tile stands for, so its play button works long after the play that made it. */
+/** Where an album page caches itself; `ids` are the album and the sibling albums holding its other discs. */
+export const albumKey = (ids: string[]): string => `album:${ids.join(',')}`
+
+/**
+ * One album, or several albums of a split release stitched into one. Tracks keep their own disc
+ * number when tagged; untagged ones fall back to the album's position in `ids`, which is how
+ * "(Disc 2)"-style splits usually arrive.
+ */
+export async function loadAlbum(client: SubsonicClient, ids: string[]): Promise<AlbumID3 & { song: Track[] }> {
+  const albums = await Promise.all(ids.map((i) => client.getAlbum(i)))
+  if (albums.length === 1) return albums[0]
+  const song = albums
+    .flatMap((a, i) => a.song.map((t) => ({ ...t, disc: t.disc ?? i + 1 })))
+    .sort((a, b) => a.disc - b.disc || (a.track ?? 0) - (b.track ?? 0))
+  const duration = song.reduce((n, t) => n + t.duration, 0)
+  return { ...albums[0], name: parseDiscName(albums[0].name).base, songCount: song.length, duration, song }
+}
+
+/** An album's songs for a play button, from its page's cached copy when the server cannot be asked. */
+export async function albumSongs(client: SubsonicClient, ids: string[]): Promise<Track[]> {
+  return (await cachedOr(albumKey(ids), () => loadAlbum(client, ids))).song
+}
+
+/**
+ * Re-fetch what a shelf tile stands for, so its play button works long after the play that made it.
+ * Offline, a page already seen answers from its cached copy, and what of it is on this device plays.
+ */
 export async function loadRecent(c: SubsonicClient, r: RecentItem): Promise<Track[]> {
   const v = r.view
   if (!v) return r.track ? [r.track] : []
   switch (v.name) {
-    case 'album': {
-      const albums = await Promise.all([v.id, ...(v.discIds ?? [])].map((i) => c.getAlbum(i)))
-      return albums.flatMap((a) => a.song)
-    }
+    case 'album':
+      return albumSongs(c, [v.id, ...(v.discIds ?? [])])
     case 'artist':
       return artistTracks(c, await c.getArtist(v.id))
     case 'playlist':
-      return (await c.getPlaylist(v.id)).entry
+      return (await loadPlaylist(c, v.id)).entry
     case 'genre':
-      return c.getSongsByGenre(v.value)
+      return cachedOr(`genre:${v.value}`, () => c.getSongsByGenre(v.value))
     case 'mood': {
       const albums = (await allAlbums(c)).filter((a) => hasMood(a, v.value))
       return (await mapLimit(albums, ALBUM_FETCH_LIMIT, (a) => c.getAlbum(a.id))).flatMap((a) => a.song)
     }
-    case 'mix':
-      return buildMix(c, seedOfView(v), allAlbums)
+    case 'mix': {
+      const seed = seedOfView(v)
+      return cachedOr(mixKey(seed), () => buildMix(c, seed, allAlbums))
+    }
     // Saved with its songs, so the shelf plays the lineup as it was kept rather than today's roll.
     case 'savedMix':
       return findSavedMix(v.id)?.tracks ?? []
     case 'favorites':
-      return (await c.getStarred2()).songs
+      return (await cachedOr('starred', () => c.getStarred2())).songs
     default:
       return []
   }

@@ -3,7 +3,7 @@
  * Every visible window is a pure subscriber of PlayerEvents and only ever sends PlayerCommands.
  */
 
-import type { AlbumListType } from './subsonic/types'
+import type { AlbumListType, Playlist } from './subsonic/types'
 
 export interface Track {
   id: string
@@ -144,6 +144,27 @@ export function sanitizeResume(r: ResumeState | null | undefined): ResumeState |
 }
 
 /**
+ * The first queue index from `from` on, going the way `step` points, that `playable` allows, for
+ * when only part of a queue can play (offline, with some of it on disk). `wrap` carries on round
+ * the end of the queue, as repeat-all does. Undefined when nothing that way can play.
+ */
+export function nextPlayable(
+  length: number,
+  from: number,
+  step: 1 | -1,
+  wrap: boolean,
+  playable: (index: number) => boolean
+): number | undefined {
+  for (let n = 0; n < length; n++) {
+    let i = from + n * step
+    if (wrap) i = ((i % length) + length) % length
+    else if (i < 0 || i >= length) return undefined
+    if (playable(i)) return i
+  }
+  return undefined
+}
+
+/**
  * What a mix is seeded from: a genre tag, a mood tag, or one artist the mix is built around.
  * Optional on a View because mixes were genre-only at first, so a missing kind means `genre`.
  */
@@ -250,6 +271,16 @@ export interface DownloadStatus extends Download {
   /** Songs that would not download this session; they are tried again on the next sync. */
   failed: number
 }
+
+/** A playlist with its songs, as `getPlaylist` gives it. */
+export type PlaylistWithTracks = Playlist & { entry: Track[] }
+
+/**
+ * What a download is made from. A playlist brings itself along, kept with the download and
+ * refreshed on every sync, so it opens with the server out of reach even when the library cache
+ * has lost it; a mix's songs already live with the saved mix.
+ */
+export type NewDownload = Omit<Download, 'addedAt'> & { playlist?: PlaylistWithTracks }
 
 export const downloadKey = (kind: Download['kind'], id: string): string => `${kind}:${id}`
 

@@ -1,9 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ListPlus, Shuffle } from 'lucide-react'
-import type { AlbumID3 } from '@shared/subsonic/types'
-import type { SubsonicClient } from '@shared/subsonic/client'
-import type { Track } from '@shared/types'
-import { filterTracks, formatDuration, parseDiscName } from '@shared/format'
+import { filterTracks, formatDuration } from '@shared/format'
 import { useClient } from '@renderer/shared/sessionStore'
 import { player } from '@renderer/shared/playerStore'
 import { Cover, useCoverColor } from '@renderer/shared/Cover'
@@ -11,31 +8,18 @@ import { TrackList } from '../components/TrackList'
 import { ActionIcon, Empty, ErrorBox, Loading, PageTitle } from '../components/ui'
 import { useAsync } from '../useAsync'
 import { nav } from '../nav'
-import { albumRecent, playFrom } from '../recents'
-
-/**
- * One album, or several albums of a split release stitched into one. Tracks keep their own disc
- * number when tagged; untagged ones fall back to the album's position in `ids`, which is how
- * "(Disc 2)"-style splits usually arrive.
- */
-async function loadAlbum(client: SubsonicClient, ids: string[]): Promise<AlbumID3 & { song: Track[] }> {
-  const albums = await Promise.all(ids.map((i) => client.getAlbum(i)))
-  if (albums.length === 1) return albums[0]
-  const song = albums
-    .flatMap((a, i) => a.song.map((t) => ({ ...t, disc: t.disc ?? i + 1 })))
-    .sort((a, b) => a.disc - b.disc || (a.track ?? 0) - (b.track ?? 0))
-  const duration = song.reduce((n, t) => n + t.duration, 0)
-  return { ...albums[0], name: parseDiscName(albums[0].name).base, songCount: song.length, duration, song }
-}
+import { useNoneOnDevice } from '../offline'
+import { albumKey, albumRecent, loadAlbum, playFrom } from '../recents'
 
 export function AlbumView({ id, discIds }: { id: string; discIds?: string[] }) {
   const client = useClient()
   const ids = [id, ...(discIds ?? [])]
-  const key = ids.join(',')
-  const state = useAsync(`album:${key}`, () => (client ? loadAlbum(client, ids) : undefined), [client, key])
+  const key = albumKey(ids)
+  const state = useAsync(key, () => (client ? loadAlbum(client, ids) : undefined), [client, key])
   const [query, setQuery] = useState('')
   const shown = useMemo(() => filterTracks(state.data?.song ?? [], query), [state.data, query])
   const color = useCoverColor(state.data?.coverArt ?? state.data?.id)
+  const unplayable = useNoneOnDevice(state.data?.song)
 
   if (state.loading) return <Loading />
   if (state.error) return <ErrorBox message={state.error} onRetry={state.reload} />
@@ -66,12 +50,12 @@ export function AlbumView({ id, discIds }: { id: string; discIds?: string[] }) {
           </span>
         }
         search={{ value: query, onChange: setQuery, placeholder: 'Search in this album' }}
-        play={{ onClick: () => playFrom(songs, 0, origin), from: origin.key }}
+        play={{ onClick: () => playFrom(songs, 0, origin), disabled: unplayable, from: origin.key }}
         actions={
           <>
             <ActionIcon
               title="Shuffle"
-              
+              disabled={unplayable}
               onClick={() => {
                 player.setShuffle(true)
                 playFrom(songs, Math.floor(Math.random() * songs.length), origin)
@@ -79,7 +63,7 @@ export function AlbumView({ id, discIds }: { id: string; discIds?: string[] }) {
             >
               <Shuffle size={28} />
             </ActionIcon>
-            <ActionIcon onClick={() => player.addToQueue(songs)} title="Add to queue">
+            <ActionIcon onClick={() => player.addToQueue(songs)} disabled={unplayable} title="Add to queue">
               <ListPlus size={28} />
             </ActionIcon>
           </>

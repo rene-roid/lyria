@@ -9,9 +9,10 @@ import { TrackPage } from '../components/TrackPage'
 import { DownloadButton } from '../components/DownloadButton'
 import { downloads, useDownload } from '../downloads'
 import { Empty, GhostButton, PageTitle, SectionHeader } from '../components/ui'
-import { buildMix, mixSeeds, type MixSeed } from '../mixes'
+import { buildMix, mixKey, mixSeeds, type MixSeed } from '../mixes'
 import { allAlbums } from '../albumList'
 import { nav } from '../nav'
+import { cachedOr } from '../offline'
 import { playFrom, recentOf } from '../recents'
 import { findSavedMix, savedMixId, savedMixRecent, savedMixes, useSavedMixes } from '../savedMixes'
 import { useAsync } from '../useAsync'
@@ -35,7 +36,7 @@ function MixCard({ seed }: { seed: MixSeed }) {
       onOpen={() => nav.go({ name: 'mix', kind: seed.kind, value: seed.value })}
       from={mixRecent(seed).key}
       onPlay={async () => {
-        const tracks = client ? await buildMix(client, seed, allAlbums) : []
+        const tracks = client ? await cachedOr(mixKey(seed), () => buildMix(client, seed, allAlbums)) : []
         if (tracks.length) playFrom(tracks, 0, mixRecent(seed))
       }}
     />
@@ -61,7 +62,20 @@ export function MixRow({ shelf = false }: { shelf?: boolean }) {
   )
 }
 
-/** The kept lineups. Their songs are already in hand, so the cards play without touching the server. */
+/** A kept lineup. Its songs are already in hand, so the card plays without touching the server. */
+export function SavedMixCard({ mix }: { mix: SavedMix }) {
+  return (
+    <Card
+      art={<TagArt art={{ style: 'mix', seed: mix.seed }} name={mix.title} fallback={mix.tracks[0]?.coverArt} />}
+      title={mix.title}
+      subtitle={`Saved ${savedOn(mix.savedAt)}`}
+      onOpen={() => nav.go({ name: 'savedMix', id: mix.id })}
+      from={savedMixRecent(mix).key}
+      onPlay={() => playFrom(mix.tracks, 0, savedMixRecent(mix))}
+    />
+  )
+}
+
 function SavedMixRow({ mixes }: { mixes: SavedMix[] }) {
   return (
     <section className="mb-8">
@@ -74,15 +88,7 @@ function SavedMixRow({ mixes }: { mixes: SavedMix[] }) {
       ) : (
         <CardGrid>
           {mixes.map((mix) => (
-            <Card
-              key={mix.id}
-              art={<TagArt art={{ style: 'mix', seed: mix.seed }} name={mix.title} fallback={mix.tracks[0]?.coverArt} />}
-              title={mix.title}
-              subtitle={`Saved ${savedOn(mix.savedAt)}`}
-              onOpen={() => nav.go({ name: 'savedMix', id: mix.id })}
-              from={savedMixRecent(mix).key}
-              onPlay={() => playFrom(mix.tracks, 0, savedMixRecent(mix))}
-            />
+            <SavedMixCard key={mix.id} mix={mix} />
           ))}
         </CardGrid>
       )}
@@ -123,7 +129,7 @@ export function MixView({ value, kind = 'genre' }: { value: string; kind?: MixKi
   const saved = useSavedMixes().some((m) => m.id === savedMixId(seed))
   const download = useDownload(downloadKey('mix', savedMixId(seed)))
   const state = useAsync(
-    `mix:${kind}:${value}`,
+    mixKey(seed),
     () => (client ? buildMix(client, seed, allAlbums) : undefined),
     [client, kind, value]
   )

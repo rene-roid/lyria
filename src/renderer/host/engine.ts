@@ -7,7 +7,7 @@ import type {
   ResumeState,
   Track
 } from '@shared/types'
-import { replayGainFactor, sanitizeResume } from '@shared/types'
+import { nextPlayable, replayGainFactor, sanitizeResume } from '@shared/types'
 import type { SubsonicClient } from '@shared/subsonic/client'
 import { clamp } from '@shared/format'
 
@@ -49,6 +49,8 @@ export class AudioEngine {
   private localUrl: string | null = null
   /** Bumped on every load, so a cache download that lands late cannot hijack a newer track. */
   private localToken = 0
+  /** Whether the server can be reached. Without it, songs with no copy on disk are skipped, not streamed. */
+  private online = true
 
   constructor(private readonly emit: Emit) {
     const a = this.audio
@@ -101,6 +103,12 @@ export class AudioEngine {
    */
   reportPlay?: (id: string, time: number) => void
 
+  /** Which of `ids` have a downloaded or cached copy. Undefined: every song is taken to stream. */
+  available?: (ids: string[]) => Promise<string[]>
+
+  /** Asks whether the server can be reached right now, once a song has failed to stream. */
+  checkOnline?: () => Promise<boolean>
+
   private async onAudioError(): Promise<void> {
     const a = this.audio
     const code = a.error?.code
@@ -121,6 +129,13 @@ export class AudioEngine {
       this.load(this.index, wasPlaying, at)
       return
     }
+    // No server anywhere: carry on with what is on this device instead of failing down the queue.
+    if (this.online && this.checkOnline && !(await this.checkOnline().catch(() => true))) this.online = false
+    if (!this.online && this.available) {
+      this.consecutiveErrors = 0
+      this.load(this.index + 1, wasPlaying)
+      return
+    }
     this.emit('error', { message: `Playback error${code ? ` (code ${code})` : ''}: ${track?.title ?? 'unknown track'}` })
     if (this.consecutiveErrors < Math.min(this.queue.length, 5)) {
       window.setTimeout(() => this.next(true), 400)
@@ -134,6 +149,10 @@ export class AudioEngine {
   setClient(client: SubsonicClient | null): void {
     this.client = client
     if (!client) this.handle('stop', undefined)
+  }
+
+  setOnline(online: boolean): void {
+    this.online = online
   }
 
   setFramesWanted(wanted: boolean): void {
@@ -328,7 +347,37 @@ export class AudioEngine {
     this.gain.gain.setTargetAtTime(factor, this.ctx.currentTime, 0.05)
   }
 
-  private load(index: number, autoplay: boolean, seek = 0): void {
+  /**
+   * Load the song at `index`. Offline, that is the nearest one from there that is on this device,
+   * looking the way `step` points, so the queue plays what it can rather than erroring song by song.
+   */
+  private load(index: number, autoplay: boolean, seek = 0, step: 1 | -1 = 1): void {
+    if (this.online || !this.available || !this.client) return this.open(index, autoplay, seek)
+    const token = (this.localToken += 1)
+    void this.available(this.queue.map((t) => t.id))
+      .catch((): string[] => [])
+      .then((ids) => {
+        if (token !== this.localToken) return
+        const local = new Set(ids)
+        const at = nextPlayable(this.queue.length, index, step, this.repeat === 'all', (i) => local.has(this.queue[i].id))
+        if (at === undefined) this.nothingOnDevice(clamp(index, 0, this.queue.length - 1))
+        else this.open(at, autoplay, at === index ? seek : 0)
+      })
+  }
+
+  /** Offline with nothing left to play from disk: rest on the song asked for, unloaded, and say why. */
+  private nothingOnDevice(index: number): void {
+    this.audio.pause()
+    this.releaseLocal()
+    this.audio.removeAttribute('src')
+    this.audio.load()
+    this.index = index
+    this.emit('trackChanged', { track: this.current, index })
+    this.emit('positionUpdate', { position: 0, duration: this.current?.duration ?? 0 })
+    this.emit('error', { message: 'Offline, and nothing further in the queue is on this device' })
+  }
+
+  private open(index: number, autoplay: boolean, seek = 0): void {
     const track = this.queue[index]
     if (!track || !this.client) return
     this.ensureGraph()
@@ -455,11 +504,11 @@ export class AudioEngine {
       this.audio.currentTime = 0
       this.emitPosition()
       if (this.index <= 0 && this.audio.currentTime <= 3 && this.repeat === 'all' && this.queue.length > 1) {
-        this.load(this.queue.length - 1, !this.audio.paused)
+        this.load(this.queue.length - 1, !this.audio.paused, 0, -1)
       }
       return
     }
-    this.load(this.index - 1, !this.audio.paused)
+    this.load(this.index - 1, !this.audio.paused, 0, -1)
   }
 
   private onEnded(): void {
