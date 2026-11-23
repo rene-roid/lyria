@@ -81,6 +81,8 @@ export function childToTrack(c: Child): Track {
     starred: Boolean(c.starred),
     bitRate: c.bitRate,
     suffix: c.suffix,
+    playCount: c.playCount,
+    played: c.played,
     // baseGain is deliberately dropped: it is the Opus header gain, which the decoder already applies.
     gain: c.replayGain && {
       track: c.replayGain.trackGain,

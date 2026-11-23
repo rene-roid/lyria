@@ -29,6 +29,8 @@ export interface AlbumID3 {
   songCount?: number
   duration?: number
   playCount?: number
+  /** OpenSubsonic: when any of its songs was last played. */
+  played?: string
   created?: string
   starred?: string
   year?: number
@@ -75,6 +77,8 @@ export interface Child {
   type?: string
   starred?: string
   playCount?: number
+  /** OpenSubsonic: when it was last played. */
+  played?: string
   moods?: string[]
   replayGain?: ReplayGain
 }

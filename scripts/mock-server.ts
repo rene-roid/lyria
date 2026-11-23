@@ -25,6 +25,49 @@ const albums = [
   { id: 'al5', name: 'Deep Field OST (Disc 2)', artist: 'Various Artists', year: 2020, genre: 'Soundtrack', moods: ['epic'], songCount: 2, duration: 24, coverArt: 'al5', created: '2024-04-02T00:00:00Z' },
   { id: 'al6', name: 'Paper Town', artist: 'Mira Kato', year: 2022, genre: 'Original Score', moods: ['calm'], songCount: 2, duration: 24, coverArt: 'al6', created: '2024-05-01T00:00:00Z' }
 ]
+// A dozen more bands with a play history, so the discovery mixes have something to work with:
+// favourites left alone for months, ones played this week, barely touched records and new arrivals.
+type History = 'forgotten' | 'lately' | 'light' | 'none' | 'new'
+const BANDS: [name: string, genre: string, history: History][] = [
+  ['Coral Drive', 'Indie', 'forgotten'],
+  ['Night Ferry', 'Electronic', 'forgotten'],
+  ['Velvet Hours', 'Jazz', 'forgotten'],
+  ['Lumen Choir', 'Ambient', 'lately'],
+  ['Saltwater Kids', 'Indie', 'lately'],
+  ['Glass Harbor', 'Electronic', 'light'],
+  ['Paper Moons', 'Indie', 'none'],
+  ['Hollow Pines', 'Ambient', 'none'],
+  ['Copper Tide', 'Electronic', 'none'],
+  ['June Static', 'Jazz', 'none'],
+  ['Kite Season', 'Indie', 'new'],
+  ['Neon Orchard', 'Electronic', 'new']
+]
+const DAY = 86_400_000
+const ago = (days: number): string => new Date(Date.now() - days * DAY).toISOString()
+const SCALE = [196, 220, 247, 262, 294, 330, 349, 392]
+const generated: { id: string; title: string; albumId: string; track: number; freq: number }[] = []
+const plays = new Map<string, { playCount: number; played: string }>()
+BANDS.forEach(([name, genre, history], b) => {
+  const artistId = `gar${b}`
+  artists.push({ id: artistId, name, albumCount: 2 })
+  for (const n of [1, 2]) {
+    const id = `g${b}-${n}`
+    albums.push({
+      id, name: `${name} ${n === 1 ? 'I' : 'II'}`, artist: name, artistId, year: 2010 + b, genre, moods: [], songCount: 8,
+      duration: 96, coverArt: id, created: history === 'new' ? ago(2 + n) : ago(400 + b * 10 + n)
+    })
+    for (let t = 0; t < 8; t++) {
+      const sid = `${id}-${t + 1}`
+      generated.push({ id: sid, title: `${name.split(' ')[1]} ${n}.${t + 1}`, albumId: id, track: t + 1, freq: SCALE[(b + t) % 8] })
+      const hit = n === 1 && t < 5
+      if (history === 'forgotten' && hit) plays.set(sid, { playCount: 4 + ((t * 3) % 7), played: ago(120 + b) })
+      else if (history === 'lately' && hit) plays.set(sid, { playCount: 5 + t, played: ago(2) })
+      else if (history === 'light' && n === 1 && t < 2) plays.set(sid, { playCount: 1, played: ago(30) })
+      else if ((history === 'forgotten' || history === 'lately') && n === 2 && t === 0) plays.set(sid, { playCount: 1, played: ago(200) })
+    }
+  }
+})
+
 const songs = [
   { id: 's1', title: 'Dawn Chorus', albumId: 'al1', track: 1, freq: 220 },
   { id: 's2', title: 'Ice Sheet', albumId: 'al1', track: 2, freq: 277 },
@@ -38,7 +81,8 @@ const songs = [
   { id: 's10', title: 'Event Horizon', albumId: 'al5', track: 1, freq: 349 },
   { id: 's11', title: 'End Credits', albumId: 'al5', track: 2, freq: 370 },
   { id: 's12', title: 'Paper Town', albumId: 'al6', track: 1, freq: 415 },
-  { id: 's13', title: 'Last Bus', albumId: 'al6', track: 2, freq: 466 }
+  { id: 's13', title: 'Last Bus', albumId: 'al6', track: 2, freq: 466 },
+  ...generated
 ].map((s) => {
   const album = albums.find((a) => a.id === s.albumId)!
   return {
@@ -159,6 +203,11 @@ const covers: Record<string, Buffer> = {
   ar1: png(300, [120, 80, 180]),
   ar2: png(300, [180, 160, 60])
 }
+const HUES: [number, number, number][] = [
+  [220, 110, 90], [60, 140, 210], [200, 170, 70], [120, 90, 200], [70, 180, 170], [210, 90, 160],
+  [150, 190, 80], [90, 120, 150], [230, 140, 50], [170, 100, 120], [80, 200, 120], [190, 80, 230]
+]
+albums.filter((a) => a.id.startsWith('g')).forEach((a, i) => (covers[a.id] = png(300, HUES[(i * 5) % HUES.length])))
 
 // ---- lyrics ----------------------------------------------------------------------------------
 
@@ -183,7 +232,13 @@ const fail = (code: number, message: string) =>
 const song = (id: string) => songs.find((s) => s.id === id)
 const strip = (s: (typeof songs)[number]) => {
   const { freq: _f, ...rest } = s
-  return rest
+  return { ...rest, ...plays.get(s.id) }
+}
+/** An album with the play count of its songs and the last time any of them played, as Navidrome reports them. */
+const withPlays = (a: (typeof albums)[number]): (typeof albums)[number] & { playCount?: number; played?: string } => {
+  const own = songs.filter((s) => s.albumId === a.id).flatMap((s) => plays.get(s.id) ?? [])
+  if (!own.length) return a
+  return { ...a, playCount: own.reduce((n, p) => n + p.playCount, 0), played: own.map((p) => p.played).sort().at(-1) }
 }
 const cors = { 'Access-Control-Allow-Origin': '*' }
 
@@ -203,21 +258,28 @@ Bun.serve({
         case 'ping':
           return ok()
         case 'getArtists':
-          return ok({ artists: { ignoredArticles: 'The', index: [{ name: 'A', artist: [artists[0]] }, { name: 'B', artist: [artists[1]] }] } })
+          return ok({
+            artists: {
+              ignoredArticles: 'The',
+              index: [...new Set(artists.map((a) => a.name[0]))].sort().map((name) => ({ name, artist: artists.filter((a) => a.name[0] === name) }))
+            }
+          })
         case 'getArtist': {
           const a = artists.find((x) => x.id === q.get('id'))
           if (!a) return fail(70, 'Artist not found')
-          return ok({ artist: { ...a, album: albums.filter((al) => al.artistId === a.id) } })
+          return ok({ artist: { ...a, album: albums.filter((al) => al.artistId === a.id).map(withPlays) } })
         }
         case 'getAlbum': {
           const a = albums.find((x) => x.id === q.get('id'))
           if (!a) return fail(70, 'Album not found')
-          return ok({ album: { ...a, song: songs.filter((s) => s.albumId === a.id).map(strip) } })
+          return ok({ album: { ...withPlays(a), song: songs.filter((s) => s.albumId === a.id).map(strip) } })
         }
         case 'getAlbumList2': {
           const type = q.get('type')
-          const list = [...albums]
+          let list = albums.map(withPlays)
           if (type === 'newest') list.sort((a, b) => b.created.localeCompare(a.created))
+          if (type === 'frequent') list = list.filter((a) => a.playCount).sort((a, b) => (b.playCount ?? 0) - (a.playCount ?? 0))
+          if (type === 'recent') list = list.filter((a) => a.played).sort((a, b) => (b.played ?? '').localeCompare(a.played ?? ''))
           if (type === 'alphabeticalByName') list.sort((a, b) => a.name.localeCompare(b.name))
           if (type === 'random') list.sort(() => Math.random() - 0.5)
           const offset = Number(q.get('offset') ?? 0)

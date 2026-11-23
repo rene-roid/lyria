@@ -23,6 +23,9 @@ export interface Track {
   starred?: boolean
   bitRate?: number
   suffix?: string
+  /** How often and when last the server saw it played; the discovery mixes are built off these. */
+  playCount?: number
+  played?: string
   /** ReplayGain tags from the server, used by the volume-normalisation setting. */
   gain?: { track?: number; album?: number; trackPeak?: number; albumPeak?: number; fallback?: number }
 }
@@ -182,11 +185,17 @@ export function nextPlayable(
   return undefined
 }
 
+/** Mixes built off your play history alone, to surface music you have not been playing. */
+export const DISCOVERY_KINDS = ['discover', 'deepCuts', 'rediscover', 'fresh'] as const
+export type DiscoveryKind = (typeof DISCOVERY_KINDS)[number]
+export const isDiscovery = (kind: string): kind is DiscoveryKind => (DISCOVERY_KINDS as readonly string[]).includes(kind)
+
 /**
- * What a mix is seeded from: a genre tag, a mood tag, or one artist the mix is built around.
- * Optional on a View because mixes were genre-only at first, so a missing kind means `genre`.
+ * What a mix is seeded from: a genre tag, a mood tag, one artist the mix is built around, or for
+ * a discovery mix, nothing but the history itself. Optional on a View because mixes were
+ * genre-only at first, so a missing kind means `genre`.
  */
-export type MixKind = 'genre' | 'mood' | 'artist'
+export type MixKind = 'genre' | 'mood' | 'artist' | DiscoveryKind
 
 /** Every navigable page of the main window. Lives here because `recents` persists it. */
 export type View =

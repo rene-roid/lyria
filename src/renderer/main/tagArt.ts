@@ -9,11 +9,11 @@
  */
 import { useEffect, useSyncExternalStore } from 'react'
 import type { SubsonicClient } from '@shared/subsonic/client'
-import type { View } from '@shared/types'
+import { isDiscovery, type View } from '@shared/types'
 import { cacheRead, cacheWrite, onCacheClear } from '@renderer/shared/cache'
 import { allAlbums } from './albumList'
 import { useClient } from '@renderer/shared/sessionStore'
-import { shuffle, seedOfView, type MixSeed } from './mixes'
+import { buildMix, librarySources, shuffle, seedOfView, type MixSeed } from './mixes'
 
 /**
  * Which look draws the background: a genre's or mood's poster, or a mix's colour band. A mix is
@@ -113,6 +113,9 @@ const coversOf = (items: { id: string; coverArt?: string }[]): string[] =>
 
 export async function candidates(client: SubsonicClient, seed: MixSeed): Promise<string[]> {
   const want = seed.value.toLowerCase()
+  // A discovery mix has no tag to borrow covers from, so it wears its own songs' -- from the build
+  // the shelf already made to know it has any.
+  if (isDiscovery(seed.kind)) return coversOf(await buildMix(client, seed, librarySources))
   if (seed.kind === 'mood') {
     return coversOf((await allAlbums(client)).filter((a) => a.moods?.some((m) => m.toLowerCase() === want)))
   }

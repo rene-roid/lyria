@@ -8,6 +8,7 @@ import * as downloads from './downloads'
 import { runInHost, setupHostJobs } from './hostJobs'
 import { setupIpc, setPlayerHooks, sendCommand, playerState } from './ipc'
 import { flushSync as flushMetaCache } from './metaCache'
+import { flush as flushPlayHistory } from './playHistory'
 import * as scrobbles from './scrobbles'
 import { flushSettings, getSettings, onSettingsChange, updateSettings } from './store'
 import { sanitizeResume } from '@shared/types'
@@ -201,6 +202,7 @@ app.on('will-quit', () => {
   // Settings reach the disk on a debounce; this is the last chance for one still waiting.
   flushSettings()
   flushMetaCache()
+  flushPlayHistory()
 })
 
 app.on('window-all-closed', () => {

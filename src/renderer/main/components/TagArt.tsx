@@ -6,11 +6,11 @@
  */
 import { useState, type ReactNode } from 'react'
 import { Loader2, Play } from 'lucide-react'
-import { paletteColor } from '@shared/navimix'
 import { useCoverUrl } from '@renderer/shared/Cover'
 import { artKey, shownCover, useTagArt, type ArtRef } from '../tagArt'
 import { lookColor, tagLook, usePoster, type TagLook } from '../tagLook'
-import { seedOf, type MixSeed } from '../mixes'
+import { isDiscovery } from '@shared/types'
+import { mixColor, seedOf, type MixSeed } from '../mixes'
 import { SectionHeader } from './ui'
 import { MixCover } from './MixCover'
 
@@ -85,7 +85,7 @@ function Sign({ look, className = '' }: { look: TagLook; className?: string }) {
 function MixArt({ art, name, fallback }: { art: ArtRef; name: string; fallback?: string }) {
   const ids = useTagArt(art)
   // `fallback` is for a kept mix whose tag no longer has covers to pick: its own first song's.
-  return <MixCover title={name} color={paletteColor(art.seed.value)} art={ids[0] ?? fallback} photo />
+  return <MixCover title={name} color={mixColor(art.seed)} art={ids[0] ?? fallback} photo={!isDiscovery(art.seed.kind)} />
 }
 
 function SquareArt({ seed }: { seed: MixSeed }) {
