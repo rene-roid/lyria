@@ -72,12 +72,6 @@ const PANEL = '#121212'
 const FPS = 30
 /** Audio frames come at ~30fps; one this old means the music stopped. */
 const STALE_MS = 100
-/**
- * The curtains only have fine detail across, so as navidroid does they are drawn over the top half
- * at a sixth of its height and stretched back up. Across, half the panel's CSS width is plenty.
- */
-const ACROSS = 0.5
-const DOWN = 1 / 12
 
 /** A tiny seeded generator, so the stars and each shooting star land in the same place every time. */
 function random(seed: number): () => number {
@@ -407,12 +401,13 @@ export function Aurora({ options, hidden = false, className = '' }: { options: A
     const ro = new ResizeObserver(() => {
       w = el.clientWidth
       h = el.clientHeight
-      // Stars at CSS pixels: on a high-density screen they soften a touch, at a fraction of the fill.
-      skyEl.width = w
-      skyEl.height = h
-      // A small box, like the settings swatch, keeps enough pixels for the rim to stay a line.
-      curtainEl.width = Math.max(1, Math.round(w * ACROSS), Math.min(w, 256))
-      curtainEl.height = Math.max(1, Math.round(h * DOWN), Math.min(Math.round(h / 2), 32))
+      // Both at the screen's own pixels: stretching a smaller drawing up smears the rims and rays.
+      const dpr = window.devicePixelRatio || 1
+      skyEl.width = Math.round(w * dpr)
+      skyEl.height = Math.round(h * dpr)
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      curtainEl.width = Math.max(1, Math.round(w * dpr))
+      curtainEl.height = Math.max(1, Math.round((h / 2) * dpr))
       // Resizing a canvas clears it, so it needs drawing again even when nothing moves.
       starsAt = -Infinity
       draw()
