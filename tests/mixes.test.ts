@@ -88,11 +88,11 @@ describe('mix seeds', () => {
   })
 
   test('kinds take turns, so one well-tagged kind cannot fill the whole row', async () => {
-    expect((await mixSeeds(client, 4)).map((s) => s.kind)).toEqual(['genre', 'mood', 'artist', 'genre'])
+    expect((await mixSeeds(client, undefined, 4)).map((s) => s.kind)).toEqual(['genre', 'mood', 'artist', 'genre'])
   })
 
   test('stops once every kind is exhausted, and never seeds off a compilation credit', async () => {
-    const seeds = await mixSeeds(client, 20)
+    const seeds = await mixSeeds(client, undefined, 20)
     expect(seeds.length).toBe(6)
     expect(seeds.filter((s) => s.kind === 'artist').map((s) => s.value)).toEqual(['Nova', 'Kite'])
   })

@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, setSystemTime, test } from 'bun:test'
 import { SubsonicClient } from '../src/shared/subsonic/client'
 import { buildMix, discoverySeeds, type MixSeed } from '../src/renderer/main/mixes'
+import type { PlayHistory } from '../src/shared/playHistory'
 import type { DiscoveryKind, Session, Track } from '../src/shared/types'
 
 const session: Session = { server: 'http://s', username: 'u', token: 't', salt: 's' }
@@ -70,9 +71,11 @@ const GENRES: Record<string, Record<string, unknown>[]> = {
 interface Library {
   taste: Record<string, unknown>[]
   recent?: string[]
+  /** False for a server that keeps no play history at all: no counts and no dates on anything. */
+  counts?: boolean
 }
 
-function fakeClient({ taste, recent = [] }: Library, calls: string[] = []): SubsonicClient {
+function fakeClient({ taste, recent = [], counts = true }: Library, calls: string[] = []): SubsonicClient {
   const dated = taste.some((a) => a.played)
   return new SubsonicClient(session, async (url) => {
     const method = new URL(url).pathname.split('/').pop()!
@@ -91,7 +94,8 @@ function fakeClient({ taste, recent = [] }: Library, calls: string[] = []): Subs
       const list = type === 'frequent' ? taste : type === 'newest' ? NEWEST : type === 'recent' ? taste.filter((a) => recent.includes(a.id as string)) : []
       body = { albumList2: { album: list } }
     }
-    return new Response(JSON.stringify({ 'subsonic-response': { status: 'ok', ...body } }))
+    const blind = (key: string, value: unknown): unknown => (counts || (key !== 'playCount' && key !== 'played') ? value : undefined)
+    return new Response(JSON.stringify({ 'subsonic-response': { status: 'ok', ...body } }, blind))
   })
 }
 
@@ -175,6 +179,29 @@ describe('without play history', () => {
       expect(await build(kind, { taste: [] })).toEqual([])
     }
     expect(await discoverySeeds(fakeClient({ taste: [] }))).toEqual([])
+  })
+})
+
+describe("from this device's play history alone", () => {
+  const at = (days: number): number => NOW.getTime() - days * 86_400_000
+  const played = (artist: string, albumId: string, genre: string, count: number) => ({ count, lastPlayed: at(3), artist, albumId, album: albumId, genre })
+  const history: PlayHistory = {
+    'f1-0': played('Nova', 'f1', 'indie', 6),
+    'f1-1': played('Nova', 'f1', 'indie', 4),
+    'f3-0': played('Moss', 'f3', 'jazz', 2),
+    i0: played('Stranger 0', 'si', 'indie', 3)
+  }
+  const sources = { albums: async () => [], history: async () => history }
+
+  test('a server that reports no plays still gets a Discover mix, without the songs played here', async () => {
+    const client = fakeClient({ taste: [], counts: false })
+    expect(await discoverySeeds(fakeClient({ taste: [], counts: false }))).toEqual([])
+    const mix = await buildMix(client, seed('discover'), sources)
+    // Every artist of the two genres played here at two songs each, the cap of fifty reached.
+    expect(mix.length).toBe(50)
+    expect(ids(mix)).not.toContain('i0')
+    expect(byArtist(mix)['Stranger 0']).toBe(2)
+    expect(byArtist(mix).Nova).toBe(2)
   })
 })
 

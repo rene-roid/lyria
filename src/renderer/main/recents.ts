@@ -7,7 +7,7 @@ import { player, usePlayerState } from '@renderer/shared/playerStore'
 import { useSessionStore } from '@renderer/shared/sessionStore'
 import { mapLimit } from '@shared/async'
 import { allAlbums } from './albumList'
-import { ALBUM_FETCH_LIMIT, buildMix, mixKey, seedOfView } from './mixes'
+import { ALBUM_FETCH_LIMIT, buildMix, librarySources, mixKey, seedOfView } from './mixes'
 import { loadPlaylist } from './downloads'
 import { cachedOr } from './offline'
 import { findSavedMix } from './savedMixes'
@@ -119,7 +119,7 @@ export async function loadRecent(c: SubsonicClient, r: RecentItem): Promise<Trac
     }
     case 'mix': {
       const seed = seedOfView(v)
-      return cachedOr(mixKey(seed), () => buildMix(c, seed, allAlbums))
+      return cachedOr(mixKey(seed), () => buildMix(c, seed, librarySources))
     }
     // Saved with its songs, so the shelf plays the lineup as it was kept rather than today's roll.
     case 'savedMix':

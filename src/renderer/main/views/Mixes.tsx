@@ -1,6 +1,7 @@
 import { BookmarkCheck, BookmarkPlus, Trash2 } from 'lucide-react'
 import { downloadKey, type MixKind, type SavedMix } from '@shared/types'
 import { MIX_SECTIONS, partitionHidden } from '@shared/navimix'
+import type { SubsonicClient } from '@shared/subsonic/client'
 import { useClient } from '@renderer/shared/sessionStore'
 import { Card, CardGrid, PlaylistCard, Shelf } from '../components/AlbumCard'
 import { TagArt, TagArtCover } from '../components/TagArt'
@@ -8,8 +9,7 @@ import { TrackPage } from '../components/TrackPage'
 import { DownloadButton } from '../components/DownloadButton'
 import { downloads, useDownload } from '../downloads'
 import { Empty, GhostButton, PageTitle, SectionHeader } from '../components/ui'
-import { buildMix, discoverySeeds, MIXES, mixColor, mixKey, mixSeeds, mixTitle, type MixSeed } from '../mixes'
-import { allAlbums } from '../albumList'
+import { buildMix, discoverySeeds, librarySources, MIXES, mixColor, mixKey, mixSeeds, mixTitle, type MixSeed } from '../mixes'
 import { nav } from '../nav'
 import { cachedOr } from '../offline'
 import { playFrom, recentOf } from '../recents'
@@ -33,7 +33,7 @@ function MixCard({ seed }: { seed: MixSeed }) {
       onOpen={() => nav.go({ name: 'mix', kind: seed.kind, value: seed.value })}
       from={mixRecent(seed).key}
       onPlay={async () => {
-        const tracks = client ? await cachedOr(mixKey(seed), () => buildMix(client, seed, allAlbums)) : []
+        const tracks = client ? await cachedOr(mixKey(seed), () => buildMix(client, seed, librarySources)) : []
         if (tracks.length) playFrom(tracks, 0, mixRecent(seed))
       }}
     />
@@ -46,8 +46,8 @@ function MixCard({ seed }: { seed: MixSeed }) {
  */
 const ROWS = {
   // :2 because the cache is on disk and older builds stored bare genre strings under 'mixes'.
-  tags: { title: 'Mixed by Lyria', key: 'mixes:2', seeds: mixSeeds },
-  discover: { title: 'Discover', key: 'mixes:discover', seeds: discoverySeeds }
+  tags: { title: 'Mixed by Lyria', key: 'mixes:2', seeds: (c: SubsonicClient) => mixSeeds(c, librarySources) },
+  discover: { title: 'Discover', key: 'mixes:discover', seeds: (c: SubsonicClient) => discoverySeeds(c, librarySources) }
 }
 
 /** The day's mixes: one shelf on Home, the full grid on the Mixes page. Nothing until there is play history to seed from. */
@@ -142,7 +142,7 @@ export function MixView({ value, kind = 'genre' }: { value: string; kind?: MixKi
   const download = useDownload(downloadKey('mix', savedMixId(seed)))
   const state = useAsync(
     mixKey(seed),
-    () => (client ? buildMix(client, seed, allAlbums) : undefined),
+    () => (client ? buildMix(client, seed, librarySources) : undefined),
     [client, kind, value]
   )
   return (

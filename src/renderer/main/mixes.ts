@@ -14,15 +14,24 @@ import { DISCOVERY_KINDS, type MixKind, type Track, type View } from '@shared/ty
 import { mapLimit } from '@shared/async'
 import { capitalize, hasMood } from '@shared/format'
 import { paletteColor } from '@shared/navimix'
+import { localAlbums, mergeTaste, withLocalPlays, type PlayHistory } from '@shared/playHistory'
 import { cacheRead, cacheWrite } from '@renderer/shared/cache'
+import { allAlbums } from './albumList'
 
 /**
- * Where the whole album list comes from. Injected rather than imported, so this module stays a
- * plain function of a client -- the renderer hands in its cached copy, and the unit tests hand in
- * nothing and get the straight server walk.
+ * Where the whole album list and this device's play history come from. Injected rather than
+ * imported, so this module stays a plain function of a client -- the renderer hands in its cached
+ * album list and main's history, and the unit tests hand in nothing and get the straight server
+ * walk and no history of their own.
  */
 export type AlbumSource = (client: SubsonicClient) => Promise<AlbumID3[]>
-const serverAlbums: AlbumSource = (client) => client.getAllAlbums()
+export interface MixSources {
+  albums: AlbumSource
+  history: () => Promise<PlayHistory>
+}
+const serverOnly: MixSources = { albums: (client) => client.getAllAlbums(), history: async () => ({}) }
+/** The app's: the album list it keeps, and the plays main has recorded on this device. */
+export const librarySources: MixSources = { albums: allAlbums, history: () => window.lyria.history.get() }
 
 /** What one mix is built around. `value` is the tag text or the artist's name, and empty for a discovery mix. */
 export interface MixSeed {
@@ -180,17 +189,30 @@ function once<T>(client: SubsonicClient, key: string, load: () => Promise<T>): P
   return job
 }
 
-/** Your most played albums, most played first. Empty without play history, which empties every discovery mix. */
-const taste = (client: SubsonicClient): Promise<AlbumID3[]> =>
-  once(client, `taste:${today()}`, () => client.getAlbumList2('frequent', TASTE_ALBUMS))
+/** This device's plays, read once a day like everything else a day's mixes are built from. */
+const history = (client: SubsonicClient, sources: MixSources): Promise<PlayHistory> =>
+  once(client, `history:${today()}`, sources.history)
+
+/** Songs with this device's plays folded into the server's, which is what every pick below goes by. */
+const counted = (tracks: Track[], local: PlayHistory): Track[] => tracks.map((t) => withLocalPlays(t, local[t.id]))
+
+/**
+ * Your most played albums, by the server's counts and this device's, most played first. Empty
+ * without play history, which empties every discovery mix.
+ */
+const taste = (client: SubsonicClient, sources: MixSources): Promise<AlbumID3[]> =>
+  once(client, `taste:${today()}`, async () => {
+    const [server, local] = await Promise.all([client.getAlbumList2('frequent', TASTE_ALBUMS), history(client, sources)])
+    return mergeTaste(server, local, TASTE_ALBUMS)
+  })
 
 /**
  * What to build mixes from, drawn from your most played albums: their genres, their mood tags and
  * the artists themselves. The kinds are dealt round-robin so the row is a spread rather than six
  * genres, and a kind the library has no tags for simply drops out.
  */
-export async function mixSeeds(client: SubsonicClient, count = 6): Promise<MixSeed[]> {
-  const albums = await taste(client)
+export async function mixSeeds(client: SubsonicClient, sources: MixSources = serverOnly, count = 6): Promise<MixSeed[]> {
+  const albums = await taste(client, sources)
   const byKind: [MixKind, string[]][] = [
     ['genre', tally(albums.map((a) => a.genre))],
     // Lowercased so one mood tagged two ways counts as one seed.
@@ -251,10 +273,11 @@ const unplayed = (t: Track): boolean => !t.playCount
 const enough = (tracks: Track[]): Track[] => (tracks.length >= MIN_DISCOVERY ? tracks : [])
 
 /** Songs you have never played from the genres you play most, artists missing from your most played first. */
-async function discover(client: SubsonicClient, day: string): Promise<Track[]> {
-  const top = await taste(client)
+async function discover(client: SubsonicClient, day: string, sources: MixSources): Promise<Track[]> {
+  const top = await taste(client, sources)
   const genres = [...plays(top, (a) => a.genre).keys()].slice(0, DISCOVER_GENRES)
-  const pool = (await Promise.all(genres.map((g) => client.getSongsByGenre(g, 500)))).flat().filter(unplayed)
+  const pulls = (await Promise.all(genres.map((g) => client.getSongsByGenre(g, 500)))).flat()
+  const pool = counted(pulls, await history(client, sources)).filter(unplayed)
   const known = new Set(top.map((a) => a.artist?.toLowerCase()))
   const isKnown = (t: Track): boolean => known.has(t.artist.toLowerCase())
   const strangers = shuffle(pool.filter((t) => !isKnown(t)), day)
@@ -263,45 +286,49 @@ async function discover(client: SubsonicClient, day: string): Promise<Track[]> {
 }
 
 /** Songs you passed over by the artists you play most: the album tracks their hits crowd out. */
-async function deepCuts(client: SubsonicClient, day: string): Promise<Track[]> {
-  const top = await taste(client)
+async function deepCuts(client: SubsonicClient, day: string, sources: MixSources): Promise<Track[]> {
+  const top = await taste(client, sources)
   const artists = [...plays(top, (a) => (isArtist(a.artist) ? a.artistId : undefined)).keys()].slice(0, DEEP_ARTISTS)
   const catalogues = await mapLimit(artists, ALBUM_FETCH_LIMIT, (id) => client.getArtist(id))
   const songs = await songsOf(client, catalogues.flatMap((c) => shuffle(c.album, day).slice(0, DEEP_ALBUMS)))
-  const passed = songs.filter((t) => (t.playCount ?? 0) <= RARELY)
+  const passed = counted(songs, await history(client, sources)).filter((t) => (t.playCount ?? 0) <= RARELY)
   return enough(shuffle(spread(shuffle(passed, day), MIX_LENGTH, PER_SEED_ARTIST), day))
 }
 
 /**
  * Songs you played a lot and then left alone. Goes by when each was last played where the server
- * says (OpenSubsonic); otherwise a most played album missing from the recently played list counts
- * as left alone.
+ * (OpenSubsonic) or this device says; otherwise a most played album missing from the recently
+ * played list counts as left alone.
  */
-async function rediscover(client: SubsonicClient, day: string): Promise<Track[]> {
-  const top = await taste(client)
+async function rediscover(client: SubsonicClient, day: string, sources: MixSources): Promise<Track[]> {
+  const top = await taste(client, sources)
   if (!top.length) return []
   const cutoff = Date.now() - FORGOTTEN_MS
   const longAgo = (played: string | undefined): boolean => !!played && Date.parse(played) < cutoff
-  const recent = top.some((a) => a.played)
+  const recent = top.every((a) => a.played)
     ? undefined
     : new Set((await client.getAlbumList2('recent', TASTE_ALBUMS)).map((a) => a.id))
-  const stale = top.filter((a) => (recent ? !recent.has(a.id) : longAgo(a.played)))
-  const songs = await songsFrom(client, stale.slice(0, REDISCOVER_POOL), REDISCOVER_ALBUMS, day)
+  const stale = top.filter((a) => (a.played ? longAgo(a.played) : !recent?.has(a.id)))
+  const picked = await songsFrom(client, stale.slice(0, REDISCOVER_POOL), REDISCOVER_ALBUMS, day)
+  const songs = counted(picked, await history(client, sources))
   const loved = songs.filter((t) => (t.playCount ?? 0) >= LOVED && (!t.played || longAgo(t.played)))
   return enough(shuffle(spread(shuffle(loved, day), MIX_LENGTH, PER_ALBUM_ARTIST), day))
 }
 
 /** New arrivals you have not played yet, the albums in the genres you play most first. */
-async function fresh(client: SubsonicClient, day: string): Promise<Track[]> {
-  const top = await taste(client)
+async function fresh(client: SubsonicClient, day: string, sources: MixSources): Promise<Track[]> {
+  const top = await taste(client, sources)
   if (!top.length) return []
   const liking = plays(top, (a) => a.genre)
   const score = (a: AlbumID3): number => (a.genre && liking.get(a.genre)) || 0
+  const local = await history(client, sources)
+  const played = localAlbums(local)
+  const newest = (await client.getAlbumList2('newest', FRESH_LIST)).map((a) => withLocalPlays(a, played.get(a.id)))
   // Sorting is stable, so albums that match equally well stay newest first.
-  const ranked = (await client.getAlbumList2('newest', FRESH_LIST)).filter((a) => !a.playCount).sort((a, b) => score(b) - score(a))
+  const ranked = newest.filter((a) => !a.playCount).sort((a, b) => score(b) - score(a))
   const albums = await mapLimit(ranked.slice(0, FRESH_ALBUMS), ALBUM_FETCH_LIMIT, (a) => client.getAlbum(a.id))
   // Which of each album's songs make the cut changes by the day; the best matched albums still go first.
-  const songs = albums.flatMap((a) => shuffle(a.song.filter(unplayed), day))
+  const songs = albums.flatMap((a) => shuffle(counted(a.song, local).filter(unplayed), day))
   return enough(shuffle(spread(songs, MIX_LENGTH, PER_ALBUM_ARTIST), day))
 }
 
@@ -316,7 +343,7 @@ interface MixDef {
    * from the tag mixes, which take a colour from their tag and wear a photo.
    */
   color?: string
-  build: (client: SubsonicClient, value: string, day: string, albums: AlbumSource) => Promise<Track[]>
+  build: (client: SubsonicClient, value: string, day: string, sources: MixSources) => Promise<Track[]>
 }
 
 /** Tag text arrives lowercased from most taggers; an artist's name is already cased how they want it. */
@@ -331,7 +358,7 @@ export const MIXES: Record<MixKind, MixDef> = {
   mood: {
     title: tagTitle,
     label: 'Mood mix',
-    build: async (client, mood, day, albums) => spread(shuffle(await moodPool(client, mood, day, albums), day))
+    build: async (client, mood, day, sources) => spread(shuffle(await moodPool(client, mood, day, sources.albums), day))
   },
   artist: {
     title: (name) => `${name} Mix`,
@@ -343,28 +370,28 @@ export const MIXES: Record<MixKind, MixDef> = {
     label: 'Discovery mix',
     about: "Songs you've never played, in the genres you play most",
     color: '#7c4dff',
-    build: (client, _, day) => discover(client, day)
+    build: (client, _, day, sources) => discover(client, day, sources)
   },
   deepCuts: {
     title: () => 'Deep Cuts',
     label: 'Discovery mix',
     about: 'The album tracks you skipped, by the artists you play most',
     color: '#d9480f',
-    build: (client, _, day) => deepCuts(client, day)
+    build: (client, _, day, sources) => deepCuts(client, day, sources)
   },
   rediscover: {
     title: () => 'Forgotten Favorites',
     label: 'Discovery mix',
     about: "Songs you used to play a lot and haven't in a while",
     color: '#c79100',
-    build: (client, _, day) => rediscover(client, day)
+    build: (client, _, day, sources) => rediscover(client, day, sources)
   },
   fresh: {
     title: () => 'Fresh in Your Library',
     label: 'Discovery mix',
     about: "New arrivals you haven't played, closest to your taste first",
     color: '#0b9a8d',
-    build: (client, _, day) => fresh(client, day)
+    build: (client, _, day, sources) => fresh(client, day, sources)
   }
 }
 
@@ -377,22 +404,22 @@ interface Lineup {
   tracks: Track[]
 }
 
-export function buildMix(client: SubsonicClient, seed: MixSeed, albums: AlbumSource = serverAlbums): Promise<Track[]> {
+export function buildMix(client: SubsonicClient, seed: MixSeed, sources: MixSources = serverOnly): Promise<Track[]> {
   const day = daySeed(seed)
   // Apart from `mixKey`'s copy, which the pages keep whatever day it is from to paint at once and to play offline.
   const key = `today:${mixKey(seed)}`
   return once(client, `mix:${day}`, async () => {
     const kept = cacheRead<Lineup>(key)
     if (kept?.day === day) return kept.tracks
-    const tracks = await MIXES[seed.kind].build(client, seed.value, day, albums)
+    const tracks = await MIXES[seed.kind].build(client, seed.value, day, sources)
     cacheWrite(key, { day, tracks } satisfies Lineup)
     return tracks
   })
 }
 
 /** The discovery mixes that have songs today. One the history or the library cannot fill yet is left out. */
-export async function discoverySeeds(client: SubsonicClient): Promise<MixSeed[]> {
+export async function discoverySeeds(client: SubsonicClient, sources: MixSources = serverOnly): Promise<MixSeed[]> {
   const seeds = DISCOVERY_KINDS.map((kind): MixSeed => ({ kind, value: '' }))
-  const built = await Promise.all(seeds.map((seed) => buildMix(client, seed)))
+  const built = await Promise.all(seeds.map((seed) => buildMix(client, seed, sources)))
   return seeds.filter((_, i) => built[i].length > 0)
 }
