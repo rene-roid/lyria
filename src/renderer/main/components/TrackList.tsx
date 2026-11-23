@@ -39,6 +39,8 @@ const UNPLAYABLE_HINT: Record<NonNullable<Unplayable>, string> = {
   offline: 'Not on this device; plays once Lyria can reach your server'
 }
 
+const songEntry = (t: Track): BlockedEntry => ({ id: t.id, name: t.title, by: t.artist })
+
 export function TrackList({
   tracks,
   showAlbum = true,
@@ -460,7 +462,7 @@ export function TrackMenu({
           <MenuSeparator />
           <MenuItem
             icon={songBlocked ? <CircleCheck size={14} /> : <Ban size={14} />}
-            onClick={run(block('songs', { id: track.id, name: track.title, by: track.artist }, !songBlocked))}
+            onClick={run(block('songs', songEntry(track), !songBlocked))}
           >
             {songBlocked ? 'Unblock this song' : "Don't play this song"}
           </MenuItem>
@@ -528,6 +530,12 @@ function SelectionMenu({
   const offline = useOffline()
   const [picking, setPicking] = useState(false)
   const none = playable.length === 0
+  const blocked = useSettings().blocked
+  const allBlocked = tracks.every((t) => blocked.songs.some((s) => s.id === t.id))
+  const blockAll = (): void => {
+    const next = tracks.reduce((b, t) => withBlock(b, 'songs', songEntry(t), !allBlocked), blocked)
+    void window.lyria.settings.update({ blocked: next })
+  }
 
   const run = (fn: () => void) => () => {
     fn()
@@ -560,6 +568,10 @@ function SelectionMenu({
             disabled={!client || offline}
           >
             {starred ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem icon={allBlocked ? <CircleCheck size={14} /> : <Ban size={14} />} onClick={run(blockAll)}>
+            {allBlocked ? 'Unblock these songs' : "Don't play these songs"}
           </MenuItem>
           {onRemove && (
             <>
