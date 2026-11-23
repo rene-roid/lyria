@@ -1,49 +1,15 @@
 import { ChevronLeft, ChevronRight, Home, Search, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { SubsonicClient } from '@shared/subsonic/client'
-import { useClient, useSessionStore } from '@renderer/shared/sessionStore'
+import { useSessionStore } from '@renderer/shared/sessionStore'
 import { nav, useNav } from './nav'
-
-/** How often the server is pinged to refresh the connectivity dot. */
-const PING_MS = 30_000
-
-/** true = server answered, false = unreachable, undefined = not checked yet. */
-function useServerStatus(client: SubsonicClient | null): boolean | undefined {
-  const [ok, setOk] = useState<boolean>()
-
-  useEffect(() => {
-    setOk(undefined)
-    if (!client) return
-    let cancelled = false
-    const check = (): void => {
-      void client.ping().then(
-        () => !cancelled && setOk(true),
-        () => !cancelled && setOk(false)
-      )
-    }
-    const offline = (): void => setOk(false)
-    check()
-    const id = setInterval(check, PING_MS)
-    window.addEventListener('online', check)
-    window.addEventListener('offline', offline)
-    return () => {
-      cancelled = true
-      clearInterval(id)
-      window.removeEventListener('online', check)
-      window.removeEventListener('offline', offline)
-    }
-  }, [client])
-
-  return ok
-}
+import { useConnection } from './offline'
 
 /** navidroid's profile button: the user's initial, opening Settings, with the server's status on it. */
 function Avatar() {
-  const client = useClient()
   const username = useSessionStore((s) => s.session?.username) ?? ''
-  const ok = useServerStatus(client)
+  const ok = useConnection()
   const active = useNav((s) => s.view.name === 'settings')
-  const status = ok === undefined ? 'Checking server…' : ok ? 'Connected' : 'Server unreachable'
+  const status = ok === null ? 'Checking server…' : ok ? 'Connected' : 'Offline · playing what is on this device'
   return (
     <button
       onClick={() => nav.go({ name: 'settings' })}
@@ -57,7 +23,7 @@ function Avatar() {
         role="status"
         aria-label={status}
         className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full ring-2 ring-surface ${
-          ok === undefined ? 'bg-white/40' : ok ? 'bg-accent' : 'bg-red-400'
+          ok === null ? 'bg-white/40' : ok ? 'bg-accent' : 'bg-red-400'
         }`}
       />
     </button>

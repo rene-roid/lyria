@@ -18,12 +18,14 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { downloadKey, viewKey } from '@shared/types'
 import { MIX_SECTIONS } from '@shared/navimix'
+import type { Playlist } from '@shared/subsonic/types'
 import { Cover } from '@renderer/shared/Cover'
 import { useClient } from '@renderer/shared/sessionStore'
 import { nav, useNav, type View } from './nav'
 import { playlists, savedFirst, useSavedPlaylists, useServerPlaylists } from './playlists'
 import { useSavedMixes } from './savedMixes'
-import { useDownload } from './downloads'
+import { useDownload, useDownloads } from './downloads'
+import { useOffline } from './offline'
 import { allAlbums } from './albumList'
 import { useAsync } from './useAsync'
 import { usePlayingState } from './recents'
@@ -63,10 +65,13 @@ function LibraryRow({
 }) {
   const active = useNav((s) => viewKey(s.view) === viewKey(view))
   const { current, playing } = usePlayingState(viewKey(view))
+  const downloadable = view.name === 'playlist' || view.name === 'savedMix'
   const download = useDownload(
     view.name === 'playlist' ? downloadKey('playlist', view.id) : view.name === 'savedMix' ? downloadKey('mix', view.id) : ''
   )
   const downloaded = download && download.done >= download.trackIds.length
+  // Offline, a playlist or mix that was never downloaded has little or nothing to play, so it steps back.
+  const dim = useOffline() && downloadable && !download
   return (
     <button
       onClick={() => nav.go(view)}
@@ -74,7 +79,7 @@ function LibraryRow({
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 64px' }}
       className={`flex w-full items-center gap-3 rounded-md p-2 text-left transition ${
         active ? 'bg-white/10 hover:bg-white/[0.14]' : 'hover:bg-white/[0.07]'
-      }`}
+      } ${dim ? 'opacity-40' : ''}`}
     >
       {art}
       <div className="min-w-0 flex-1">
@@ -193,6 +198,8 @@ function Library() {
   const lists = useServerPlaylists()
   const saved = useSavedPlaylists()
   const keptMixes = useSavedMixes()
+  const offline = useOffline()
+  const downloaded = useDownloads()
   const starred = useAsync('starred', () => client?.getStarred2(), [client, shelf])
   const wantAll = !onlySaved && (shelf === 'albums' || shelf === 'artists')
   // Not cached under a key: the album list is megabytes, and allAlbums already holds it in memory.
@@ -219,7 +226,13 @@ function Library() {
   const starredIds = new Set([...(starred.data?.albums ?? []), ...(starred.data?.artists ?? [])].map((t) => t.id))
   const liked = starred.data?.songs.length
 
-  const own = keep(savedFirst(lists.own, saved), (p) => saved.includes(p.id))
+  // Downloaded playlists missing from the server's list (it never loaded, or its cached copy is
+  // gone) are listed off their downloads, so they can always be reached, server or no server.
+  const listed = new Set([...lists.own, ...lists.mixes].map((p) => p.id))
+  const unlisted: Playlist[] = downloaded
+    .filter((d) => d.kind === 'playlist' && !listed.has(d.id))
+    .map((d) => ({ id: d.id, name: d.title, coverArt: d.coverArt, songCount: d.trackIds.length }))
+  const own = keep(savedFirst([...lists.own, ...unlisted], saved), (p) => saved.includes(p.id))
   const mixes = keep(savedFirst(lists.mixes, saved), (p) => saved.includes(p.id))
   const kept = keptMixes.filter((m) => match(m.title))
   const albumRows = withStarred(starred.data?.albums, albums.data)
@@ -243,8 +256,8 @@ function Library() {
           </button>
           <button
             className="icon-btn h-8 w-8 rounded-full"
-            title="New playlist"
-            disabled={!client}
+            title={offline ? 'New playlists need your server' : 'New playlist'}
+            disabled={!client || offline}
             onClick={() => playlists.newPlaylist()}
           >
             <Plus size={18} />
@@ -277,7 +290,8 @@ function Library() {
       )}
       {/* Keyed, so switching shelves starts the new one at the top. */}
       <div key={`${shelf}:${onlySaved}`} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        {lists.error && (
+        {/* Offline is not an error: what is on this device is listed regardless. */}
+        {lists.error && !offline && (
           <div className="px-2 py-2 text-xs text-red-300">
             <div>{lists.error}</div>
             <button className="mt-1.5 rounded-md bg-white/10 px-2 py-1 text-ink hover:bg-white/15" onClick={lists.reload}>

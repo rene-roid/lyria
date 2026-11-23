@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Pause, Play, Search } from 'lucide-react'
+import { Pause, Play, Search, WifiOff } from 'lucide-react'
 import { player } from '@renderer/shared/playerStore'
+import { nav } from '../nav'
+import { useOffline } from '../offline'
 import { usePlayingState } from '../recents'
 
 export function Spinner({ className = '' }: { className?: string }) {
@@ -12,7 +14,19 @@ export function Spinner({ className = '' }: { className?: string }) {
   )
 }
 
+/** How long a load may run offline before it is taken to be waiting on the server, not reading from disk. */
+const OFFLINE_PATIENCE_MS = 800
+
 export function Loading() {
+  const offline = useOffline()
+  const [waited, setWaited] = useState(false)
+  // A server out of reach can take its time to fail outright; no point spinning until it does.
+  useEffect(() => {
+    if (!offline) return
+    const t = setTimeout(() => setWaited(true), OFFLINE_PATIENCE_MS)
+    return () => clearTimeout(t)
+  }, [offline])
+  if (offline && waited) return <OfflineNotice />
   return (
     <div className="flex h-48 items-center justify-center">
       <Spinner />
@@ -21,6 +35,8 @@ export function Loading() {
 }
 
 export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  // Nothing went wrong: the server is away and this page was never kept on this device.
+  if (useOffline()) return <OfflineNotice />
   return (
     <div className="m-6 rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
       <div className="font-semibold">Something went wrong</div>
@@ -30,6 +46,22 @@ export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () =
           Retry
         </button>
       )}
+    </div>
+  )
+}
+
+/** Where a page would be, offline, when it has nothing kept on this device to show. */
+export function OfflineNotice() {
+  return (
+    <div className="flex flex-col items-center px-6 py-20 text-center">
+      <WifiOff size={40} className="text-ink-3" />
+      <div className="mt-4 text-xl font-bold">You're offline</div>
+      <div className="mt-2 max-w-sm text-sm text-ink-2">
+        This page isn't saved on this device. Everything you've downloaded still plays.
+      </div>
+      <div className="mt-6">
+        <GhostButton onClick={() => nav.go({ name: 'home' })}>See what you can play</GhostButton>
+      </div>
     </div>
   )
 }

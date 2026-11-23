@@ -2,19 +2,24 @@ import { Shuffle } from 'lucide-react'
 import { daypart, MIX_SECTIONS, type MixPlaylist, type MixSection } from '@shared/navimix'
 import { capitalize } from '@shared/format'
 import { useClient, useSessionStore, useSettings } from '@renderer/shared/sessionStore'
+import { player } from '@renderer/shared/playerStore'
 import { Cover } from '@renderer/shared/Cover'
-import { AlbumCard, LikedCover, PlaylistCard, Shelf, Tile, TileGrid, gradient } from '../components/AlbumCard'
+import { AlbumCard, Card, CardGrid, LikedCover, PlaylistCard, Shelf, Tile, TileGrid, gradient } from '../components/AlbumCard'
 import { ServerMixCover } from '../components/MixCover'
 import { TagArt } from '../components/TagArt'
-import { ErrorBox, GhostButton } from '../components/ui'
-import { MixRow } from './Mixes'
+import { Empty, ErrorBox, GhostButton, SectionHeader } from '../components/ui'
+import { MixRow, SavedMixCard } from './Mixes'
 import { loadRecent, playFrom } from '../recents'
 import { artRefOf } from '../tagArt'
 import { useAsync } from '../useAsync'
 import { nav } from '../nav'
+import { loadPlaylist, useDownloads } from '../downloads'
+import { useOffline, useOnDevice } from '../offline'
+import { useSavedMixes } from '../savedMixes'
 import { playlistRecent, savedFirst, useSavedPlaylists, useServerPlaylists } from '../playlists'
-import type { AlbumListType } from '@shared/subsonic/types'
-import type { RecentItem } from '@shared/types'
+import type { AlbumListType, Playlist } from '@shared/subsonic/types'
+import type { SubsonicClient } from '@shared/subsonic/client'
+import { viewKey, type DownloadStatus, type RecentItem, type SavedMix, type Track } from '@shared/types'
 
 function AlbumRow({ title, type }: { title: string; type: AlbumListType }) {
   const client = useClient()
@@ -105,7 +110,96 @@ function RecentGrid({ mixes }: { mixes: MixPlaylist[] }) {
   )
 }
 
+/** Liked Songs is pinned rather than recorded on the shelf, so its play buttons go by its page's key. */
+const LIKED = viewKey({ name: 'favorites' })
+
+/** The songs of every download, each once: playlists from the copies their downloads keep, mixes from the saved lineup. */
+async function downloadedSongs(client: SubsonicClient, list: DownloadStatus[], kept: SavedMix[]): Promise<Track[]> {
+  const sets = await Promise.all(
+    list.map(async (d) =>
+      d.kind === 'playlist'
+        ? ((await loadPlaylist(client, d.id).catch(() => null))?.entry ?? [])
+        : (kept.find((m) => m.id === d.id)?.tracks ?? [])
+    )
+  )
+  return [...new Map(sets.flat().map((t) => [t.id, t])).values()]
+}
+
+/**
+ * Home with the server out of reach: everything that plays from this device, in place of shelves
+ * that could only fail to load. Downloads first, and Liked Songs when some of them are on disk.
+ */
+function OfflineHome() {
+  const client = useClient()
+  const list = useDownloads()
+  const kept = useSavedMixes()
+  // The cached copies, so a downloaded server mix keeps the title and artwork it has online.
+  const { mixes, own } = useServerPlaylists()
+  const starred = useAsync('starred', () => client?.getStarred2(), [client])
+  const liked = starred.data?.songs
+  const likedHere = useOnDevice(liked)?.size ?? 0
+
+  const known = new Map<string, Playlist>([...mixes, ...own].map((p) => [p.id, p]))
+  const cards = list.flatMap((d) => {
+    if (d.kind === 'playlist') {
+      const p = known.get(d.id) ?? { id: d.id, name: d.title }
+      return [<PlaylistCard key={d.key} playlist={{ ...p, coverArt: p.coverArt ?? d.coverArt }} />]
+    }
+    const mix = kept.find((m) => m.id === d.id)
+    return mix ? [<SavedMixCard key={d.key} mix={mix} />] : []
+  })
+
+  const shuffle = async (): Promise<void> => {
+    const songs = client ? await downloadedSongs(client, list, kept) : []
+    if (!songs.length) return
+    player.setShuffle(true)
+    playFrom(songs, Math.floor(Math.random() * songs.length), null)
+  }
+
+  return (
+    <div>
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-[#2e2745]" />
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[32px] font-bold tracking-tight">You're offline</h1>
+          <p className="mt-1 text-sm text-ink-2">Lyria can't reach your server right now. Here's everything that plays from this device.</p>
+        </div>
+        <GhostButton disabled={!list.length} onClick={() => void shuffle()}>
+          <Shuffle size={16} /> Shuffle downloads
+        </GhostButton>
+      </div>
+      {cards.length > 0 || likedHere > 0 ? (
+        <section className="mb-8">
+          <SectionHeader title="On this device" />
+          <CardGrid>
+            {likedHere > 0 && (
+              <Card
+                art={<LikedCover className="h-full w-full" />}
+                title="Liked Songs"
+                subtitle={`${likedHere} of ${liked!.length} on this device`}
+                onOpen={() => nav.go({ name: 'favorites' })}
+                from={LIKED}
+                onPlay={() => playFrom(liked!, 0, null, LIKED)}
+              />
+            )}
+            {cards}
+          </CardGrid>
+        </section>
+      ) : (
+        <Empty>
+          Nothing downloaded yet. Once you're back online, use the download button on a playlist or mix to keep it on this
+          device.
+        </Empty>
+      )}
+    </div>
+  )
+}
+
 export function Home() {
+  return useOffline() ? <OfflineHome /> : <OnlineHome />
+}
+
+function OnlineHome() {
   const client = useClient()
   const username = useSessionStore((s) => s.session?.username)
   const { mixes, own } = useServerPlaylists()

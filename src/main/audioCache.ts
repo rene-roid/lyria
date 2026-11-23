@@ -109,6 +109,17 @@ export async function cached(id: string): Promise<Buffer | null> {
   return read(file)
 }
 
+/** Which of `ids` have a copy in the cache, so they play with the server out of reach. */
+export async function available(ids: string[]): Promise<Set<string>> {
+  let names: Set<string>
+  try {
+    names = new Set(await readdir(dir()))
+  } catch {
+    return new Set() // no cache directory yet
+  }
+  return new Set(ids.filter((id) => names.has(songName(id))))
+}
+
 async function read(file: string): Promise<Buffer | null> {
   try {
     const body = await readFile(file)

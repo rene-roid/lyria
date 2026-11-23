@@ -65,10 +65,19 @@ Three on-disk caches live under the user data folder, each with a size and a cle
   a folder of their own outside the song cache's budget. A song already cached is moved over rather
   than fetched again, and a removed download hands its songs back to the cache. Playlists are
   re-synced with the server on launch and every 30 minutes. Downloading a generated mix saves its
-  lineup first, since those roll over daily.
+  lineup first, since those roll over daily. A downloaded playlist keeps a copy of itself, songs
+  included, refreshed on every sync, so it opens with no server even once the library cache has
+  lost it.
+- **Connection** (`src/main/connection.ts`): main checks whether any of the library's addresses
+  answers (every 30 seconds, every 10 while it is away, on waking from sleep, and as soon as a
+  window's request fails to reach it) and tells every window. When it answers again, held plays and
+  downloads catch up straight away.
 - **Local-first playback**: the audio host asks main for a downloaded or cached copy (`cache:local`)
   before streaming, so a song on disk plays with the server unreachable; a copy that fails to play
-  falls back to the stream.
+  falls back to the stream. Offline, songs with no copy on disk are skipped instead of streamed.
+- **Offline UI** (`src/renderer/main/offline.ts`): with the server away, Home lists what plays from
+  this device, songs with no copy on disk are greyed out, card and tile play buttons fall back to
+  the pages' cached copies, and a page never cached says so instead of showing an error.
 - **Play counts** (`src/main/scrobbles.ts`): plays are reported through main whichever copy played.
   One the server cannot take yet is kept in `pending-scrobbles.json` with the time it happened and
   sent, oldest first, when the server answers again.

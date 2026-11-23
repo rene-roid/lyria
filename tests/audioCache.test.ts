@@ -7,11 +7,12 @@ const userData = mkdtempSync(join(tmpdir(), 'lyria-cache-'))
 let maxGb = 1 / 1024 // a 1 MB budget
 
 // Bun shares one 'electron' mock across test files and can only re-point the names it was first
-// given, so every test's mock lists the same ones (artCache.test needs net and protocol).
+// given, so every test's mock lists the same ones (artCache.test needs net and protocol). The same
+// goes for the credentials mock, which connection.test needs saveSession on.
 mock.module('electron', () => ({ app: { getPath: () => userData }, net: {}, protocol: {} }))
 mock.module('../src/main/store', () => ({ getSettings: () => ({ cacheMaxGb: maxGb }) }))
-mock.module('../src/main/credentials', () => ({ loadSession: () => ({ username: 'u' }) }))
-const { bytes, evict, isLossless, stats } = await import('../src/main/audioCache')
+mock.module('../src/main/credentials', () => ({ loadSession: () => ({ username: 'u' }), saveSession: () => {} }))
+const { available, bytes, evict, isLossless, stats } = await import('../src/main/audioCache')
 
 const KB = 1024
 const put = (name: string, size: number, ageMinutes: number): void => {
@@ -69,4 +70,9 @@ test('only FLAC and WAV count as lossless, an ID3 tag in front of FLAC included'
   expect(isLossless(Buffer.from('ID3\x04\0\0\0\0\0\0\xff\xfb'))).toBe(false) // MP3
   expect(isLossless(Buffer.from('OggS\0\x02'))).toBe(false)
   expect(isLossless(Buffer.from('RIFF\0\0\0\0AVI '))).toBe(false)
+})
+
+test('tells which songs it holds a copy of, for playing with no server', async () => {
+  // 'song-1' was cached by the first test and survived eviction; the rest never were.
+  expect(await available(['song-1', 'missing', 'song-2'])).toEqual(new Set(['song-1']))
 })

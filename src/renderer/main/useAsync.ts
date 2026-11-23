@@ -1,5 +1,6 @@
 import { useEffect, useState, type DependencyList } from 'react'
 import { cacheRead, cacheWrite } from '@renderer/shared/cache'
+import { reportFailure } from './offline'
 
 export interface AsyncState<T> {
   data: T | undefined
@@ -53,6 +54,7 @@ export function useAsync<T>(
         setState({ key, data: d, error: undefined, loading: false })
       },
       (e: Error) => {
+        reportFailure(e)
         if (cancelled) return
         // A stale copy on screen beats an error box; the retry below keeps trying either way.
         setState((s) => ({ ...s, error: s.data === undefined ? (e.message ?? String(e)) : undefined, loading: false }))

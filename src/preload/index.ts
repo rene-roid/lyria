@@ -2,15 +2,16 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { release } from 'node:os'
 import { supportsNativeAcrylic } from '@shared/types'
 import type {
-  Download,
   DownloadStatus,
   HostJob,
+  NewDownload,
   PlayerCommandName,
   PlayerCommands,
   PlayerEventName,
   PlayerEvents,
   PlayerState,
   Session,
+  PlaylistWithTracks,
   Settings,
   SettingsPatch,
   Track,
@@ -126,6 +127,10 @@ const api = {
     local(id: string): Promise<Uint8Array | null> {
       return ipcRenderer.invoke('cache:local', id)
     },
+    /** Which of `ids` have a downloaded or cached copy, and so play with no server. */
+    available(ids: string[]): Promise<string[]> {
+      return ipcRenderer.invoke('cache:available', ids)
+    },
     /** A play that counts, for the server's play counts; main holds it while the server is away. */
     played(id: string, time: number): void {
       ipcRenderer.send('cache:played', id, time)
@@ -143,8 +148,12 @@ const api = {
     list(): Promise<DownloadStatus[]> {
       return ipcRenderer.invoke('downloads:list')
     },
-    add(download: Omit<Download, 'addedAt'>): Promise<void> {
+    add(download: NewDownload): Promise<void> {
       return ipcRenderer.invoke('downloads:add', download)
+    },
+    /** A downloaded playlist with its songs, as it was last seen on the server; null if not downloaded. */
+    playlist(id: string): Promise<PlaylistWithTracks | null> {
+      return ipcRenderer.invoke('downloads:playlist', id)
     },
     remove(key: string): Promise<void> {
       return ipcRenderer.invoke('downloads:remove', key)
@@ -154,6 +163,21 @@ const api = {
     },
     onChange(cb: (list: DownloadStatus[]) => void): Unsubscribe {
       return subscribe('downloads:changed', cb)
+    }
+  },
+
+  /** Whether the library can be reached; main checks on a timer and tells every window. */
+  connection: {
+    /** Null until the first check has answered. */
+    get(): Promise<boolean | null> {
+      return ipcRenderer.invoke('connection:get')
+    },
+    /** Ask the server now rather than waiting for the next round. */
+    check(): Promise<boolean> {
+      return ipcRenderer.invoke('connection:check')
+    },
+    onChange(cb: (online: boolean) => void): Unsubscribe {
+      return subscribe('connection:changed', cb)
     }
   },
 

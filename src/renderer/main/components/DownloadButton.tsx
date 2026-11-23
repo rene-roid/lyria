@@ -1,5 +1,6 @@
 import { ArrowDown, CircleArrowDown } from 'lucide-react'
 import type { DownloadStatus } from '@shared/types'
+import { useOffline } from '../offline'
 import { ActionIcon } from './ui'
 
 const R = 12
@@ -21,9 +22,14 @@ export function DownloadButton({
   onDownload: () => void
   onRemove: () => void
 }) {
+  const offline = useOffline()
   if (!status) {
     return (
-      <ActionIcon title="Download for offline listening" disabled={disabled} onClick={onDownload}>
+      <ActionIcon
+        title={offline ? 'Downloads start once Lyria can reach your server' : 'Download for offline listening'}
+        disabled={disabled || offline}
+        onClick={onDownload}
+      >
         <CircleArrowDown size={28} strokeWidth={1.75} />
       </ActionIcon>
     )

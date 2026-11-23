@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { SubsonicClient } from '@shared/subsonic/client'
-import type { Download, DownloadStatus } from '@shared/types'
+import type { Download, DownloadStatus, NewDownload, PlaylistWithTracks } from '@shared/types'
 import * as audioCache from './audioCache'
 import { loadSession } from './credentials'
 import { Shrinker } from './shrink'
@@ -22,8 +22,11 @@ const root = (): string => join(app.getPath('userData'), 'downloads')
 const songsDir = (): string => join(root(), 'songs')
 const indexFile = (): string => join(root(), 'index.json')
 
-/** A download and the account it belongs to; several accounts can keep their own. */
-type Entry = Download & { owner: string }
+/**
+ * A download and the account it belongs to; several accounts can keep their own. A playlist is
+ * kept along with it, so it opens offline; one downloaded before that picks it up on its next sync.
+ */
+type Entry = Download & { owner: string; playlist?: PlaylistWithTracks }
 
 const ownerOf = (s = loadSession()): string => (s ? `${s.servers?.[0] ?? s.server}|${s.username}` : '')
 const userOf = (owner: string): string => owner.slice(owner.lastIndexOf('|') + 1)
@@ -67,6 +70,12 @@ function onDisk(): Promise<Set<string>> {
   return (present ??= readdir(songsDir())
     .then((names) => new Set(names.filter((n) => !n.endsWith('.part'))))
     .catch(() => new Set<string>()))
+}
+
+/** Which of `ids` have been downloaded, whatever download they came in with. */
+export async function available(ids: string[]): Promise<Set<string>> {
+  const have = await onDisk()
+  return new Set(ids.filter((id) => have.has(audioCache.songName(id))))
 }
 
 /** The downloaded copy of a song, if there is one. */
@@ -204,18 +213,30 @@ function changed(): void {
 
 export async function list(): Promise<DownloadStatus[]> {
   const have = await onDisk()
-  return mine().map(({ owner: _, ...d }) => ({
+  // Without the playlist: this goes to every window several times a second while songs land.
+  return mine().map(({ owner: _, playlist: __, ...d }) => ({
     ...d,
     done: d.trackIds.filter((id) => have.has(audioCache.songName(id))).length,
     failed: d.trackIds.filter((id) => failed.has(id)).length
   }))
 }
 
-export function add(d: Omit<Download, 'addedAt'>): void {
+/** A downloaded playlist as it was last seen on the server, or null if it is not downloaded. */
+export function playlist(id: string): PlaylistWithTracks | null {
+  return mine().find((e) => e.kind === 'playlist' && e.id === id)?.playlist ?? null
+}
+
+export function add(d: NewDownload): void {
   const owner = ownerOf()
   if (!owner || !d.key || !Array.isArray(d.trackIds)) return
   const before = all().find((e) => e.key === d.key && e.owner === owner)
-  const next: Entry = { ...d, trackIds: [...new Set(d.trackIds)], owner, addedAt: before?.addedAt ?? Date.now() }
+  const next: Entry = {
+    ...d,
+    trackIds: [...new Set(d.trackIds)],
+    owner,
+    addedAt: before?.addedAt ?? Date.now(),
+    playlist: Array.isArray(d.playlist?.entry) ? d.playlist : before?.playlist
+  }
   entries = [next, ...all().filter((e) => e !== before)]
   save()
   if (before) void giveBack(before.trackIds)
@@ -252,6 +273,7 @@ export async function sync(): Promise<void> {
       e.trackIds = ids
       e.title = pl.name
       e.coverArt = pl.coverArt ?? pl.entry[0]?.coverArt
+      e.playlist = pl
     } catch {
       // offline, or the playlist is gone: keep what is on disk
     }

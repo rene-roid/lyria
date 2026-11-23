@@ -6,7 +6,7 @@ import {
   type PlayerEventName,
   type PlayerEvents,
   type PlayerState,
-  type Download,
+  type NewDownload,
   type Session,
   type Settings,
   type SettingsPatch
@@ -15,12 +15,12 @@ import {
   SubsonicClient,
   credentialsFromPassword,
   normalizeServerUrl,
-  pickFastestServer,
   probeServers,
   type ServerProbe
 } from '@shared/subsonic/client'
 import * as artCache from './artCache'
 import * as audioCache from './audioCache'
+import * as connection from './connection'
 import * as downloads from './downloads'
 import * as metaCache from './metaCache'
 import * as scrobbles from './scrobbles'
@@ -110,26 +110,6 @@ export function sendCommand<K extends PlayerCommandName>(cmd: K, payload?: Playe
   host.webContents.send('player:command', cmd, payload)
 }
 
-/** Persist a new active server and tell every window, but only when it actually changed. */
-function activate(session: Session, server: string): Session {
-  if (server === session.server) return session
-  const next: Session = { ...session, server }
-  saveSession(next)
-  broadcast('auth:changed', [next])
-  return next
-}
-
-/** Ping all candidates and switch to whichever answers first. Keeps the current pick if none do. */
-async function reselect(): Promise<Session | null> {
-  const session = loadSession()
-  if (!session || (session.servers?.length ?? 0) < 2) return session
-  try {
-    return activate(session, await pickFastestServer(session, session.servers!))
-  } catch {
-    return session // nothing answered; leave the pick alone so a flaky network is not destructive
-  }
-}
-
 export function setupIpc(): void {
   // ---- player event bus -----------------------------------------------------
   ipcMain.on('player:emit', (e: IpcMainEvent, event: PlayerEventName, payload: unknown) => {
@@ -181,6 +161,7 @@ export function setupIpc(): void {
       }
       saveSession(session)
       broadcast('auth:changed', [session])
+      void connection.check()
       void downloads.sync()
       void scrobbles.flush()
       return session
@@ -196,16 +177,16 @@ export function setupIpc(): void {
     const next: Session = { ...session, servers, server: servers.includes(session.server) ? session.server : servers[0] }
     saveSession(next)
     broadcast('auth:changed', [next])
-    return (await reselect()) ?? next
+    return (await connection.reselect()) ?? next
   })
 
   /** Pin a specific candidate; also how the renderer reports a failover it already performed. */
   ipcMain.handle('auth:selectServer', (_e, server: string): Session | null => {
     const session = loadSession()
-    return session ? activate(session, normalizeServerUrl(server)) : null
+    return session ? connection.activate(session, normalizeServerUrl(server)) : null
   })
 
-  ipcMain.handle('auth:reselect', (): Promise<Session | null> => reselect())
+  ipcMain.handle('auth:reselect', (): Promise<Session | null> => connection.reselect())
 
   ipcMain.handle('auth:probe', async (): Promise<ServerProbe[]> => {
     const session = loadSession()
@@ -275,6 +256,12 @@ export function setupIpc(): void {
     if (windowNameOf(e.sender.id) !== 'host') return null
     return (await downloads.bytes(id)) ?? audioCache.cached(id)
   })
+  /** Which of `ids` play with no server: downloaded, or still in the song cache. */
+  ipcMain.handle('cache:available', async (_e, ids: string[]): Promise<string[]> => {
+    if (!Array.isArray(ids)) return []
+    const [own, cached] = await Promise.all([downloads.available(ids), audioCache.available(ids)])
+    return ids.filter((id) => own.has(id) || cached.has(id))
+  })
   ipcMain.on('cache:played', (e, id: string, time: number) => {
     if (windowNameOf(e.sender.id) === 'host' && typeof id === 'string') scrobbles.submit(id, Number(time) || Date.now())
   })
@@ -283,10 +270,15 @@ export function setupIpc(): void {
 
   // ---- downloads ------------------------------------------------------------
   ipcMain.handle('downloads:list', () => downloads.list())
-  ipcMain.handle('downloads:add', (_e, d: Omit<Download, 'addedAt'>) => downloads.add(d))
+  ipcMain.handle('downloads:playlist', (_e, id: string) => downloads.playlist(String(id)))
+  ipcMain.handle('downloads:add', (_e, d: NewDownload) => downloads.add(d))
   ipcMain.handle('downloads:remove', (_e, key: string) => downloads.remove(key))
   ipcMain.handle('downloads:stats', () => downloads.stats())
   downloads.onChange((list) => broadcast('downloads:changed', [list]))
+
+  // ---- connection ------------------------------------------------------------
+  ipcMain.handle('connection:get', () => connection.status())
+  ipcMain.handle('connection:check', () => connection.check())
 
   // ---- cover art cache -----------------------------------------------------
   ipcMain.handle('art:stats', () => artCache.stats())

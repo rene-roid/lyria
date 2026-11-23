@@ -20,6 +20,7 @@ import { Cover } from '@renderer/shared/Cover'
 import { player, usePlayerState } from '@renderer/shared/playerStore'
 import { useClient } from '@renderer/shared/sessionStore'
 import { nav } from '../nav'
+import { useOffline, useOnDevice } from '../offline'
 import { playFrom } from '../recents'
 import { playlists, usePlaylistsRevision } from '../playlists'
 import { useAsync } from '../useAsync'
@@ -54,6 +55,9 @@ export function TrackList({
   const currentId = usePlayerState((s) => s.track?.id)
   const playing = usePlayerState((s) => s.playing)
   const client = useClient()
+  const offline = useOffline()
+  // Offline, the songs that can still play; the rest are greyed out, as Spotify does.
+  const local = useOnDevice(tracks)
   const menu = useContextMenu()
   const [menuIndex, setMenuIndex] = useState(0)
   // Server state only refreshes on reload, so remember toggles made here.
@@ -117,7 +121,8 @@ export function TrackList({
             showAlbum={showAlbum}
             showCover={showCover}
             numbered={numbered}
-            canStar={Boolean(client)}
+            canStar={Boolean(client) && !offline}
+            unavailable={local !== null && !local.has(t.id)}
             onPlay={onPlay}
             onMenu={onMenu}
             onToggleStar={toggleStar}
@@ -138,6 +143,7 @@ export function TrackList({
           pos={menu.pos}
           track={tracks[menuIndex]}
           starred={isStarred(tracks[menuIndex])}
+          unavailable={local !== null && !local.has(tracks[menuIndex].id)}
           onClose={menu.close}
           onPlay={() => playFrom(tracks, menuIndex, origin, from)}
           onToggleStar={() => void toggleStar(tracks[menuIndex])}
@@ -167,6 +173,7 @@ const TrackRow = memo(function TrackRow({
   showCover,
   numbered,
   canStar,
+  unavailable,
   onPlay,
   onMenu,
   onToggleStar
@@ -180,26 +187,31 @@ const TrackRow = memo(function TrackRow({
   showCover: boolean
   numbered: boolean
   canStar: boolean
+  /** Offline with no copy of the song on this device: shown greyed out, and it does not start. */
+  unavailable: boolean
   onPlay: (index: number) => void
   onMenu: (e: React.MouseEvent, index: number) => void
   onToggleStar: (track: Track) => void
 }) {
   return (
     <div
-      onDoubleClick={() => onPlay(i)}
+      onDoubleClick={() => !unavailable && onPlay(i)}
       onContextMenu={(e) => onMenu(e, i)}
+      title={unavailable ? 'Not on this device; plays once Lyria can reach your server' : undefined}
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 56px' }}
       className={`group grid grid-cols-[40px_1fr_auto] items-center gap-3 rounded-md px-3 py-1.5 hover:bg-white/[0.06] md:grid-cols-[40px_1fr_1fr_110px_60px] ${
         isCurrent ? 'text-accent' : ''
-      }`}
+      } ${unavailable ? 'opacity-40' : ''}`}
     >
       <div className="flex items-center justify-center text-ink-3">
-        <span className="group-hover:hidden">
+        <span className={unavailable ? '' : 'group-hover:hidden'}>
           {isCurrent && playing ? <Volume2 size={14} className="text-accent" /> : numbered ? (t.track ?? i + 1) : i + 1}
         </span>
-        <button className="hidden text-ink group-hover:block" onClick={() => onPlay(i)} title="Play">
-          <Play size={14} fill="currentColor" />
-        </button>
+        {!unavailable && (
+          <button className="hidden text-ink group-hover:block" onClick={() => onPlay(i)} title="Play">
+            <Play size={14} fill="currentColor" />
+          </button>
+        )}
       </div>
       <div className="flex min-w-0 items-center gap-3">
         {showCover && <Cover id={t.coverArt} size={80} className="h-10 w-10" />}
@@ -259,6 +271,7 @@ export function TrackMenu({
   pos,
   track,
   starred,
+  unavailable = false,
   onClose,
   onPlay,
   onToggleStar,
@@ -268,6 +281,8 @@ export function TrackMenu({
   pos: { x: number; y: number }
   track: Track
   starred: boolean
+  /** Offline with no copy of the song on this device, so there is nothing to play or queue. */
+  unavailable?: boolean
   onClose: () => void
   onPlay: () => void
   onToggleStar: () => void
@@ -275,6 +290,8 @@ export function TrackMenu({
   removeLabel?: string
 }) {
   const client = useClient()
+  // Playlists and likes live on the server, so offline there is nowhere to send a change.
+  const offline = useOffline()
   // Which list the menu has turned into, if any: playlists to add to, or the song's artists.
   const [pick, setPick] = useState<'playlist' | 'artist' | null>(null)
   const picking = pick === 'playlist'
@@ -332,23 +349,23 @@ export function TrackMenu({
       ) : (
         <>
           <MenuLabel>{track.title}</MenuLabel>
-          <MenuItem icon={<Play size={14} />} onClick={run(onPlay)}>
+          <MenuItem icon={<Play size={14} />} onClick={run(onPlay)} disabled={unavailable}>
             Play
           </MenuItem>
-          <MenuItem icon={<ListEnd size={14} />} onClick={run(() => player.addToQueue([track], true))}>
+          <MenuItem icon={<ListEnd size={14} />} onClick={run(() => player.addToQueue([track], true))} disabled={unavailable}>
             Play next
           </MenuItem>
-          <MenuItem icon={<ListPlus size={14} />} onClick={run(() => player.addToQueue([track]))}>
+          <MenuItem icon={<ListPlus size={14} />} onClick={run(() => player.addToQueue([track]))} disabled={unavailable}>
             Add to queue
           </MenuItem>
           <MenuSeparator />
-          <MenuItem icon={<Plus size={14} />} onClick={() => setPick('playlist')} disabled={!client} hint="›">
+          <MenuItem icon={<Plus size={14} />} onClick={() => setPick('playlist')} disabled={!client || offline} hint="›">
             Add to playlist
           </MenuItem>
           <MenuItem
             icon={starred ? <HeartOff size={14} /> : <Heart size={14} />}
             onClick={run(onToggleStar)}
-            disabled={!client}
+            disabled={!client || offline}
           >
             {starred ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
           </MenuItem>

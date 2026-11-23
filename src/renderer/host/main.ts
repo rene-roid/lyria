@@ -16,7 +16,7 @@ function log(msg: string): void {
   logEl.textContent = lines.join('\n')
 }
 
-const { host, auth, cache, settings } = window.lyria
+const { host, auth, cache, connection, settings } = window.lyria
 
 const engine = new AudioEngine((event, payload) => {
   host.emit(event, payload)
@@ -52,6 +52,13 @@ host.onFramesWanted((wanted) => engine.setFramesWanted(wanted))
 engine.fetchCached = (id, url) => cache.want(id, url)
 engine.findLocal = (id) => cache.local(id)
 engine.reportPlay = (id, time) => cache.played(id, time)
+engine.available = (ids) => cache.available(ids)
+engine.checkOnline = () => connection.check()
+connection.onChange((online) => {
+  engine.setOnline(online)
+  log(online ? 'server reachable' : 'server unreachable: playing what is on this device')
+})
+void connection.get().then((online) => online === false && engine.setOnline(false))
 
 host.onJob(async (job, body) => {
   const started = performance.now()

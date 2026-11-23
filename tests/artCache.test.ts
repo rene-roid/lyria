@@ -16,7 +16,7 @@ mock.module('electron', () => ({
   protocol: { handle: (_: string, fn: typeof handler) => void (handler = fn) }
 }))
 mock.module('../src/main/store', () => ({ getSettings: () => ({ artCacheMaxMb: 10 }) }))
-mock.module('../src/main/credentials', () => ({ loadSession: () => session }))
+mock.module('../src/main/credentials', () => ({ loadSession: () => session, saveSession: () => {} }))
 const { registerArtProtocol } = await import('../src/main/artCache')
 registerArtProtocol()
 
