@@ -294,9 +294,11 @@ Bun.serve({
         case 'getRandomSongs':
           return ok({ randomSongs: { song: [...songs].sort(() => Math.random() - 0.5).slice(0, Number(q.get('size') ?? 10)).map(strip) } })
         case 'getSimilarSongs2': {
-          const s = song(q.get('id') ?? '')
-          if (!s) return fail(70, 'Song not found')
-          const like = similarArtists[s.artist] ?? []
+          // Navidrome takes a song or an artist here.
+          const id = q.get('id') ?? ''
+          const of = song(id)?.artist ?? artists.find((a) => a.id === id)?.name
+          if (!of) return fail(70, 'Song not found')
+          const like = similarArtists[of] ?? []
           const count = Number(q.get('count') ?? 50)
           return ok({ similarSongs2: { song: songs.filter((x) => like.includes(x.artist)).slice(0, count).map(strip) } })
         }

@@ -46,10 +46,15 @@ export function spread(tracks: Track[], limit: number, perArtist: number): Track
 /**
  * Deal `lead` evenly through `rest` rather than stacking it up front, so an artist mix opens with
  * its artist and keeps coming back to them instead of drifting away after the first few songs.
+ * One of `lead` every `step` songs, while it lasts; by default spaced to last the whole list.
  */
-export function interleave(lead: Track[], rest: Track[], limit: number): Track[] {
+export function interleave(
+  lead: Track[],
+  rest: Track[],
+  limit: number,
+  step = Math.max(2, Math.floor(limit / lead.length))
+): Track[] {
   if (!lead.length || !rest.length) return [...lead, ...rest].slice(0, limit)
-  const step = Math.max(2, Math.floor(limit / lead.length))
   const out: Track[] = []
   let l = 0
   let r = 0

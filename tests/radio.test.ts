@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { radio, type RadioRequest, type RadioSource } from '../src/shared/radio'
+import { artistRadio, radio, type RadioRequest, type RadioSource } from '../src/shared/radio'
 import type { Track } from '../src/shared/types'
 
 const song = (id: string, artist: string, genre?: string): Track => ({ id, title: id, artist, album: '', duration: 100, genre })
@@ -128,5 +128,47 @@ describe('radio', () => {
     const s = server({})
     expect(await radio(s, ask({ seeds: [] }))).toEqual([])
     expect(s.calls).toEqual([])
+  })
+})
+
+describe('artist radio', () => {
+  const nova = (n: number, genres: string[]): Track[] =>
+    Array.from({ length: n }, (_, i) => ({ ...song(`n${i}`, 'Nova', genres[i % genres.length]), artistId: 'ar1' }))
+  const artist = (songs: Track[]) => ({ id: 'ar1', name: 'Nova', songs })
+  /** One letter per song: N for Nova's own, - for anyone else's. */
+  const shape = (tracks: Track[]): string => tracks.map((t) => (t.artist === 'Nova' ? 'N' : '-')).join('')
+
+  test("one of the artist's songs, then two similar ones, top songs first, fifty in all", async () => {
+    const own = nova(20, ['indie'])
+    const s = server({
+      similar: { ar1: [...songs('x', 40), own[0]] },
+      top: { Nova: [own[5], own[6]] }
+    })
+    const out = await artistRadio(s, artist(own), 'Mon Nov 23 2026')
+    expect(shape(out)).toBe(`${'N--'.repeat(16)}N-`)
+    expect(out[0].id).toBe('n5')
+    expect(out[3].id).toBe('n6')
+    expect(new Set(ids(out)).size).toBe(50)
+    expect(s.calls).toEqual(['similar ar1 60', 'top Nova 10'])
+  })
+
+  test('with fewer than 30 similar songs, tops up from the two genres the artist plays most', async () => {
+    const own = nova(6, ['indie', 'rock', 'indie', 'jazz', 'indie', 'rock'])
+    const s = server({
+      similar: { ar1: songs('x', 5) },
+      genre: { indie: [...songs('i', 40, 'indie'), ...own], rock: songs('r', 40, 'rock') }
+    })
+    const out = await artistRadio(s, artist(own), 'Mon Nov 23 2026')
+    expect(shape(out)).toBe(`${'N--'.repeat(6)}${'-'.repeat(32)}`)
+    expect(new Set(ids(out)).size).toBe(50)
+    expect(s.calls).toEqual(['similar ar1 60', 'top Nova 10', 'genre indie 300', 'genre rock 300'])
+  })
+
+  test('the same all day, and different the next', async () => {
+    const own = nova(20, ['indie'])
+    const s = server({ similar: { ar1: songs('x', 40) } })
+    const today = await artistRadio(s, artist(own), 'Mon Nov 23 2026')
+    expect(ids(await artistRadio(s, artist(own), 'Mon Nov 23 2026'))).toEqual(ids(today))
+    expect(ids(await artistRadio(s, artist(own), 'Tue Nov 24 2026'))).not.toEqual(ids(today))
   })
 })

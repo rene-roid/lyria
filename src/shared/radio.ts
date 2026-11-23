@@ -1,6 +1,6 @@
 /**
- * Songs to carry on with: autoplay's top-up when the queue runs out, and the run that follows a
- * song radio. The server's similar-song picks come first, but Navidrome only has those with an
+ * Songs to carry on with: autoplay's top-up when the queue runs out, the run that follows a song
+ * radio, and an artist's radio. The server's similar-song picks come first, but Navidrome only has those with an
  * agent such as Last.fm set up and otherwise answers with nothing, so the list fills up from the
  * seeds' genres and then from random songs, the way an artist mix fills up from its artist's genres.
  */
@@ -30,6 +30,18 @@ const GENRE_POOL = 300
 /** Top songs asked for per seed artist; the spread keeps a couple of them at most. */
 const TOP_SONGS = 10
 
+/** How long an artist radio runs. */
+const ARTIST_RADIO_LENGTH = 50
+/** Most of the artist's own songs an artist radio plays: one in every three. */
+const ARTIST_RADIO_OWN = 17
+/** Similar songs asked for; with fewer than ARTIST_SIMILAR_ENOUGH, the artist's genres top them up. */
+const ARTIST_SIMILAR = 60
+const ARTIST_SIMILAR_ENOUGH = 30
+/** Songs taken from each of the artist's genres when they top up the similar songs. */
+const ARTIST_GENRE_FILL = 30
+/** Of the artist's top songs, how many open their share before the rest of their songs. */
+const ARTIST_TOP = 5
+
 const none = (): Track[] => []
 
 /**
@@ -55,6 +67,34 @@ export async function radio(source: RadioSource, req: RadioRequest): Promise<Tra
     if (out.length >= count) break
   }
   return out
+}
+
+/**
+ * "X Radio": one of the artist's songs, then two by others like them, and so on, the same all
+ * `day`. The others are the server's similar songs for the artist, topped up from the artist's two
+ * most common genres when the server has fewer than 30; the artist's share opens with their top songs.
+ */
+export async function artistRadio(
+  source: RadioSource,
+  artist: { id: string; name: string; songs: Track[] },
+  day = new Date().toDateString()
+): Promise<Track[]> {
+  const seed = `artistRadio:${artist.id}:${day}`
+  const theirs = (t: Track): boolean => t.artistId === artist.id || sameArtist(t.artist, artist.name)
+  const [similar, top] = await Promise.all([
+    source.getSimilarSongs2(artist.id, ARTIST_SIMILAR).catch(none),
+    source.getTopSongs(artist.name, TOP_SONGS).catch(none)
+  ])
+  const alike = similar.filter((t) => !theirs(t))
+  if (alike.length < ARTIST_SIMILAR_ENOUGH) {
+    const genres = tally(artist.songs.map((t) => t.genre)).slice(0, 2)
+    const pulls = await Promise.all(genres.map((g) => source.getSongsByGenre(g, GENRE_POOL).catch(none)))
+    for (const pull of pulls) alike.push(...shuffle(pull.filter((t) => !theirs(t)), seed).slice(0, ARTIST_GENRE_FILL))
+  }
+  const own = [...top.filter(theirs).slice(0, ARTIST_TOP), ...shuffle(artist.songs, seed)]
+  const lead = spread(own, ARTIST_RADIO_OWN, ARTIST_RADIO_OWN)
+  const rest = ARTIST_RADIO_LENGTH - lead.length
+  return interleave(lead, spread(shuffle(alike, seed), rest, rest), ARTIST_RADIO_LENGTH, 3)
 }
 
 /** The server's picks for every seed, shuffled together so no one seed leads. */
