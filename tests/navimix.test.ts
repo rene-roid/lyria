@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { MIX_SECTIONS, classifyPlaylist, parseMix, shelfMixes, splitPlaylists, withoutHidden } from '../src/shared/navimix'
+import { MIX_SECTIONS, classifyPlaylist, parseMix, partitionHidden, shelfMixes, splitPlaylists, withoutHidden } from '../src/shared/navimix'
 
 /** The expected values are what the server's web UI shows for the same playlists (navidroid's MixesTest). */
 const nb = (text: string, tag: string): string =>
@@ -92,4 +92,11 @@ test('drops the hidden playlists and keeps the order of the rest', () => {
   const lists = [mine, jams, explo]
   expect(withoutHidden(lists, ['dj', 'gone']).map((p) => p.id)).toEqual(['mine', 'we'])
   expect(withoutHidden(lists, []).map((p) => p.id)).toEqual(['mine', 'dj', 'we'])
+})
+
+test('sets the hidden playlists apart from the shown ones', () => {
+  const { shown, hidden } = partitionHidden([mine, jams, explo], ['we', 'gone'])
+  expect(shown.map((p) => p.id)).toEqual(['mine', 'dj'])
+  expect(hidden.map((p) => p.id)).toEqual(['we'])
+  expect(partitionHidden([mine], []).hidden).toEqual([])
 })

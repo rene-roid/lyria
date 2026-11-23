@@ -212,5 +212,13 @@ export function shelfMixes(radios: RadioPlaylist[], mixes: MixPlaylist[], hour =
 
 /** The ones the user has not hidden from their library. */
 export function withoutHidden<T extends { id: string }>(items: T[], hidden: string[]): T[] {
-  return items.filter((p) => !hidden.includes(p.id))
+  return partitionHidden(items, hidden).shown
+}
+
+/** The same split in one pass, for the page that lists the hidden ones apart. */
+export function partitionHidden<T extends { id: string }>(items: T[], hidden: string[]): { shown: T[]; hidden: T[] } {
+  return {
+    shown: items.filter((p) => !hidden.includes(p.id)),
+    hidden: items.filter((p) => hidden.includes(p.id))
+  }
 }

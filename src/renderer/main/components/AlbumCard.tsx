@@ -30,7 +30,8 @@ export function Card({
   onPlay,
   onContextMenu,
   from,
-  round = false
+  round = false,
+  dim = false
 }: {
   art: React.ReactNode
   title: string
@@ -41,6 +42,8 @@ export function Card({
   /** The `viewKey` the card opens; while the queue came from there, its button pauses and resumes. */
   from?: string
   round?: boolean
+  /** Drawn faded, the way hidden playlists are in Your Library. */
+  dim?: boolean
 }) {
   const [busy, setBusy] = useState(false)
   const { current, playing } = usePlayingState(from)
@@ -53,7 +56,7 @@ export function Card({
   }
   return (
     <div
-      className="group min-w-0 cursor-pointer rounded-md p-3 transition hover:bg-white/[0.07]"
+      className={`group min-w-0 cursor-pointer rounded-md p-3 transition hover:bg-white/[0.07] ${dim ? 'opacity-40' : ''}`}
       onClick={onOpen}
       onContextMenu={onContextMenu}
     >
@@ -124,7 +127,7 @@ export function ArtistCard({ artist }: { artist: ArtistID3 }) {
 }
 
 /** A playlist, or a NaviBeat/Explo mix drawn and titled the way the web UI shows it. */
-export function PlaylistCard({ playlist: p }: { playlist: Playlist }) {
+export function PlaylistCard({ playlist: p, dim }: { playlist: Playlist; dim?: boolean }) {
   const client = useClient()
   const mix = parseMix(p.name, p.comment)
   const menu = useContextMenu()
@@ -142,6 +145,7 @@ export function PlaylistCard({ playlist: p }: { playlist: Playlist }) {
         subtitle={mix?.description ?? `By ${p.owner ?? 'you'}`}
         onOpen={() => nav.go({ name: 'playlist', id: p.id })}
         onContextMenu={menu.open}
+        dim={dim}
         from={viewKey({ name: 'playlist', id: p.id })}
         onPlay={async () => {
           const songs = client ? (await loadPlaylist(client, p.id)).entry : []

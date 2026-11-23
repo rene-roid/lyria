@@ -1,6 +1,6 @@
 import { BookmarkCheck, BookmarkPlus, Trash2 } from 'lucide-react'
 import { downloadKey, type MixKind, type SavedMix } from '@shared/types'
-import { MIX_SECTIONS, paletteColor } from '@shared/navimix'
+import { MIX_SECTIONS, paletteColor, partitionHidden } from '@shared/navimix'
 import { capitalize } from '@shared/format'
 import { useClient } from '@renderer/shared/sessionStore'
 import { Card, CardGrid, PlaylistCard, Shelf } from '../components/AlbumCard'
@@ -16,7 +16,7 @@ import { cachedOr } from '../offline'
 import { playFrom, recentOf } from '../recents'
 import { findSavedMix, savedMixId, savedMixRecent, savedMixes, useSavedMixes } from '../savedMixes'
 import { useAsync } from '../useAsync'
-import { useServerPlaylists } from '../playlists'
+import { useHiddenPlaylists, useServerPlaylists } from '../playlists'
 
 /** Tag text arrives lowercased from most taggers; an artist's name is already cased how they want it. */
 const mixTitle = (s: MixSeed): string => `${s.kind === 'artist' ? s.value : capitalize(s.value)} Mix`
@@ -98,7 +98,8 @@ function SavedMixRow({ mixes }: { mixes: SavedMix[] }) {
 
 export function MixesView() {
   const saved = useSavedMixes()
-  const { shelves: mixes } = useServerPlaylists()
+  const { shelves } = useServerPlaylists()
+  const { shown: mixes, hidden } = partitionHidden(shelves, useHiddenPlaylists())
   return (
     <div>
       <PageTitle
@@ -118,6 +119,12 @@ export function MixesView() {
       })}
       <MixRow />
       <SavedMixRow mixes={saved} />
+      {hidden.length > 0 && (
+        <section className="mb-8">
+          <SectionHeader title="Hidden" />
+          <CardGrid>{hidden.map((p) => <PlaylistCard key={p.id} playlist={p} dim />)}</CardGrid>
+        </section>
+      )}
     </div>
   )
 }
