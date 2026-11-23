@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import {
   initialPlayerState,
+  starredCopy,
   type PlayerCommandName,
   type PlayerCommands,
   type PlayerState,
@@ -33,6 +34,9 @@ export function initPlayerBridge(): void {
   player.on('queueChanged', ({ queue, index }) => set({ queue, index }))
   player.on('volumeChanged', ({ volume, muted }) => set({ volume, muted }))
   player.on('modeChanged', ({ repeat, shuffle }) => set({ repeat, shuffle }))
+  player.on('starChanged', ({ id, starred }) =>
+    set((s) => ({ track: starredCopy(s.track, id, starred), queue: s.queue.map((t) => starredCopy(t, id, starred)) }))
+  )
 }
 
 export function usePlayerState(): PlayerState
@@ -63,6 +67,7 @@ export const player = {
   clearQueue: () => send('clearQueue'),
   setRepeat: (repeat: RepeatMode) => send('setRepeat', { repeat }),
   setShuffle: (shuffle: boolean) => send('setShuffle', { shuffle }),
+  setStarred: (id: string, starred: boolean) => send('setStarred', { id, starred }),
   cycleRepeat: (current: RepeatMode) =>
     send('setRepeat', { repeat: current === 'off' ? 'all' : current === 'all' ? 'one' : 'off' })
 }

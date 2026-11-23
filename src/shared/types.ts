@@ -82,6 +82,20 @@ export const initialPlayerState: PlayerState = {
   shuffle: false
 }
 
+/**
+ * The song that plays once the current one ends: the next in the queue, or the first again on
+ * repeat-all. Repeat-one plays the same song again, so nothing is coming up.
+ */
+export function upNext(s: Pick<PlayerState, 'queue' | 'index' | 'repeat'>): Track | undefined {
+  if (s.repeat === 'one' || s.index < 0) return undefined
+  return s.queue[s.index + 1] ?? (s.repeat === 'all' && s.queue.length > 1 ? s.queue[0] : undefined)
+}
+
+/** `track` with the like a `starChanged` event reports, when it is the song that changed. */
+export function starredCopy<T extends Track | null>(track: T, id: string, starred: boolean): T {
+  return track?.id === id ? { ...track, starred } : track
+}
+
 /** Events emitted by the audio host and relayed by main to every window. */
 export interface PlayerEvents {
   hostReady: { ready: boolean }
@@ -91,6 +105,8 @@ export interface PlayerEvents {
   queueChanged: { queue: Track[]; index: number }
   volumeChanged: { volume: number; muted: boolean }
   modeChanged: { repeat: RepeatMode; shuffle: boolean }
+  /** A song in the queue was liked or unliked, from any window. */
+  starChanged: { id: string; starred: boolean }
   /** ~30fps frequency bins (0..255) and an overall level (0..1). */
   audioFrame: { bins: Uint8Array; level: number }
   error: { message: string }
@@ -115,6 +131,8 @@ export interface PlayerCommands {
   clearQueue: undefined
   setRepeat: { repeat: RepeatMode }
   setShuffle: { shuffle: boolean }
+  /** The server has taken a like; the host keeps its queue's copy in step and tells every window. */
+  setStarred: { id: string; starred: boolean }
 }
 export type PlayerCommandName = keyof PlayerCommands
 
@@ -367,12 +385,82 @@ export function overlayOpacity(o: OverlayChrome, hovering: boolean): number {
   return o.fadeOnHover && hovering ? Math.min(o.opacity, o.hoverOpacity) : o.opacity
 }
 
+/**
+ * Where the taskbar widget sits: glued to one of the anchor slots of the primary work area, or
+ * wherever it was dragged to, as the top-left corner of the window in screen DIP.
+ */
+export type WidgetPlacement = { kind: 'anchor'; anchor: OverlayAnchor } | { kind: 'free'; x: number; y: number }
+
+/** Where the widget starts, and where it goes back to when its position is reset. */
+export const HOME_ANCHOR: OverlayAnchor = 'bottom-right'
+
+/**
+ * How big a floating player is drawn. Small drops to the title alone (the widget) or the bare
+ * controls (the mini player); large adds the album line, a bigger cover and a seek bar.
+ */
+export type CardSize = 'small' | 'medium' | 'large'
+
+export const CARD_SIZES: { value: CardSize; label: string }[] = [
+  { value: 'small', label: 'Small' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'large', label: 'Large' }
+]
+
+export type VisualizerStyle = 'off' | 'bars' | 'mirror' | 'wave'
+
+export const VISUALIZER_STYLES: { value: VisualizerStyle; label: string }[] = [
+  { value: 'off', label: 'Off' },
+  { value: 'bars', label: 'Bars' },
+  { value: 'mirror', label: 'Mirror' },
+  { value: 'wave', label: 'Wave' }
+]
+
+/** `cover` is a bright take on the playing cover's own colour. */
+export type VisualizerColor = 'accent' | 'cover' | 'white'
+
+export const VISUALIZER_COLORS: { value: VisualizerColor; label: string }[] = [
+  { value: 'accent', label: 'Accent' },
+  { value: 'cover', label: 'Cover' },
+  { value: 'white', label: 'White' }
+]
+
+/**
+ * What the taskbar widget and the mini player share beyond the chrome: how the card picks up
+ * the playing song, and which controls it carries besides the transport buttons.
+ */
+export interface PlayerLook {
+  /** Wash the card in a colour picked from the cover, easing from one track to the next. */
+  tint: boolean
+  visualizer: VisualizerStyle
+  visualizerColor: VisualizerColor
+  /** Heart the playing song, after the next button. */
+  like: boolean
+  /** Shuffle toggle, before the previous button. */
+  shuffle: boolean
+}
+
+export const defaultPlayerLook: PlayerLook = {
+  tint: false,
+  visualizer: 'off',
+  visualizerColor: 'accent',
+  like: false,
+  shuffle: false
+}
+
+/** The widget card's corners. A pill rounds the cover too, so it sits concentric with the ends. */
+export type CornerStyle = 'square' | 'rounded' | 'pill'
+
+export const CORNER_STYLES: { value: CornerStyle; label: string }[] = [
+  { value: 'square', label: 'Square' },
+  { value: 'rounded', label: 'Rounded' },
+  { value: 'pill', label: 'Pill' }
+]
+
 /** Layout and chrome of the taskbar widget. Main sizes and places the window from these. */
-export interface WidgetOptions extends OverlayChrome {
-  anchor: OverlayAnchor
-  /** Shorter bar with the artist line dropped. */
-  compact: boolean
-  visualizer: boolean
+export interface WidgetOptions extends OverlayChrome, PlayerLook {
+  placement: WidgetPlacement
+  size: CardSize
+  corners: CornerStyle
   /** Thin accent progress line along the bottom edge. */
   progress: boolean
   cover: boolean
@@ -382,39 +470,74 @@ export interface WidgetOptions extends OverlayChrome {
 
 export const defaultWidgetOptions: WidgetOptions = {
   ...defaultOverlayChrome,
-  anchor: 'bottom-right',
-  compact: false,
-  visualizer: true,
+  ...defaultPlayerLook,
+  placement: { kind: 'anchor', anchor: HOME_ANCHOR },
+  size: 'medium',
+  corners: 'rounded',
+  visualizer: 'bars',
   progress: true,
   cover: true,
   elapsed: false
 }
 
-/** The mini player has no layout options of its own; its position lives in `windowBounds`. */
-export type MiniOptions = OverlayChrome
+/** The mini player's options. Its position lives in `windowBounds`, wherever it was dragged. */
+export interface MiniOptions extends OverlayChrome, PlayerLook {
+  size: CardSize
+}
 
-export const defaultMiniOptions: MiniOptions = defaultOverlayChrome
+export const defaultMiniOptions: MiniOptions = { ...defaultOverlayChrome, ...defaultPlayerLook, size: 'medium' }
 
 /** Track-change toast. It never takes the mouse, so only the card's look and its corner apply. */
-export interface ToastOptions extends Pick<OverlayChrome, 'background' | 'opacity'> {
+export interface ToastOptions extends Pick<OverlayChrome, 'background' | 'opacity'>, Pick<PlayerLook, 'tint'> {
   anchor: OverlayAnchor
 }
 
 export const defaultToastOptions: ToastOptions = {
   anchor: 'bottom-right',
   background: 'solid',
-  opacity: 1
+  opacity: 1,
+  tint: false
+}
+
+/** Width an optional shuffle or like button adds: one compact button and the gap before it. */
+const EXTRA_BUTTON = 32
+
+const extraButtons = (o: PlayerLook): number => (o.like ? 1 : 0) + (o.shuffle ? 1 : 0)
+
+/**
+ * The taskbar widget per size: the window's box with every part shown, the cover and the flex
+ * gap that goes with it, and the elapsed time next to the controls. Large shows the time beside
+ * its seek bar instead, inside the box it already has.
+ */
+export const WIDGET_LAYOUTS: Record<CardSize, { width: number; height: number; cover: number; gap: number; elapsed: number }> = {
+  small: { width: 288, height: 52, cover: 36, gap: 8, elapsed: 72 },
+  medium: { width: 340, height: 76, cover: 54, gap: 10, elapsed: 74 },
+  large: { width: 420, height: 108, cover: 84, gap: 12, elapsed: 0 }
 }
 
 /**
  * Footprint of the taskbar widget for a given set of options. Lives here so the main process
- * can size the window and the renderer can lay out to exactly the same box. The deltas are the
- * content widths in `widget/main.tsx`, each with the flex gap that goes away with it.
+ * can size the window and the renderer can lay out to exactly the same box.
  */
 export function widgetSize(o: WidgetOptions): { width: number; height: number } {
-  const c = o.compact
-  const width = (c ? 288 : 340) - (o.cover ? 0 : c ? 44 : 64) + (o.elapsed ? (c ? 72 : 74) : 0)
-  return { width, height: c ? 52 : 76 }
+  const l = WIDGET_LAYOUTS[o.size]
+  const width = l.width - (o.cover ? 0 : l.cover + l.gap) + (o.elapsed ? l.elapsed : 0) + extraButtons(o) * EXTRA_BUTTON
+  return { width, height: l.height }
+}
+
+/**
+ * The mini player per size: its window's box, the side of its cover, and the width one more
+ * control button takes, which is bigger on large where the buttons are full size.
+ */
+export const MINI_LAYOUTS: Record<CardSize, { width: number; height: number; cover: number; button: number }> = {
+  small: { width: 300, height: 84, cover: 64, button: EXTRA_BUTTON },
+  medium: { width: 340, height: 112, cover: 84, button: EXTRA_BUTTON },
+  large: { width: 384, height: 148, cover: 124, button: EXTRA_BUTTON + 4 }
+}
+
+export function miniSize(o: MiniOptions): { width: number; height: number } {
+  const l = MINI_LAYOUTS[o.size]
+  return { width: l.width + extraButtons(o) * l.button, height: l.height }
 }
 
 export interface Settings {

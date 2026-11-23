@@ -289,6 +289,12 @@ export class AudioEngine {
       case 'clearQueue':
         this.stop()
         break
+      case 'setStarred': {
+        const { id, starred } = payload as PlayerCommands['setStarred']
+        for (const t of this.queue) if (t.id === id) t.starred = starred
+        this.emit('starChanged', { id, starred })
+        break
+      }
       case 'setRepeat':
         this.repeat = (payload as PlayerCommands['setRepeat']).repeat
         this.emit('modeChanged', { repeat: this.repeat, shuffle: this.shuffle })

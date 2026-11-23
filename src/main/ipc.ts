@@ -1,6 +1,7 @@
 import { app, ipcMain, shell, type IpcMainEvent } from 'electron'
 import {
   initialPlayerState,
+  starredCopy,
   type PlayerCommandName,
   type PlayerCommands,
   type PlayerEventName,
@@ -30,11 +31,15 @@ import { getSettings, updateSettings } from './store'
 import {
   applyOverlaySettings,
   broadcast,
+  dragWidget,
+  dropWidget,
   fadeToastOut,
   getWindow,
   positionToast,
   positionWidget,
+  resizeMini,
   setWidgetEnabled,
+  settleWidget,
   showMainWindow,
   showToast,
   windowNameOf
@@ -96,6 +101,12 @@ function applyEvent<K extends PlayerEventName>(event: K, payload: PlayerEvents[K
       playerState.repeat = p.repeat
       playerState.shuffle = p.shuffle
       updateSettings({ repeat: p.repeat, shuffle: p.shuffle })
+      break
+    }
+    case 'starChanged': {
+      const { id, starred } = payload as PlayerEvents['starChanged']
+      playerState.track = starredCopy(playerState.track, id, starred)
+      playerState.queue = playerState.queue.map((t) => starredCopy(t, id, starred))
       break
     }
   }
@@ -221,7 +232,10 @@ export function setupIpc(): void {
       positionWidget()
       positionToast()
     }
-    if (patch.mini) applyOverlaySettings('mini')
+    if (patch.mini) {
+      applyOverlaySettings('mini')
+      resizeMini()
+    }
     if (patch.toast) {
       applyOverlaySettings('toast')
       positionToast()
@@ -330,6 +344,17 @@ export function setupIpc(): void {
     const name = windowNameOf(e.sender.id)
     const win = name ? getWindow(name) : undefined
     win?.setIgnoreMouseEvents(ignore, { forward: true })
+  })
+
+  ipcMain.on('widget:drag', (e, x: number, y: number) => {
+    if (windowNameOf(e.sender.id) === 'widget') dragWidget(Number(x), Number(y))
+  })
+  ipcMain.on('widget:drop', (e) => {
+    const placement = windowNameOf(e.sender.id) === 'widget' ? dropWidget() : undefined
+    if (!placement) return
+    broadcast('settings:changed', [updateSettings({ widget: { placement } })])
+    settleWidget()
+    positionToast()
   })
 
 

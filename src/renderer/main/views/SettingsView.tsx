@@ -7,6 +7,7 @@ import type {
   OverlayAnchor,
   OverlayBackground,
   OverlayChrome,
+  PlayerLook,
   Session,
   Settings,
   SettingsPatch,
@@ -14,10 +15,22 @@ import type {
   ToastOptions,
   WidgetOptions
 } from '@shared/types'
-import { OVERLAY_ANCHORS, OVERLAY_BACKGROUNDS, THEMES } from '@shared/types'
+import {
+  CARD_SIZES,
+  CORNER_STYLES,
+  HOME_ANCHOR,
+  OVERLAY_ANCHORS,
+  OVERLAY_BACKGROUNDS,
+  THEMES,
+  VISUALIZER_COLORS,
+  VISUALIZER_STYLES,
+  widgetSize
+} from '@shared/types'
 import type { ServerProbe } from '@shared/subsonic/client'
 import { clearCache } from '@renderer/shared/cache'
 import { Cover } from '@renderer/shared/Cover'
+import { nativeAcrylic, overlayCard } from '@renderer/shared/overlay'
+import { WidgetCard } from '@renderer/widget/WidgetCard'
 import { downloads, useDownloads } from '../downloads'
 import type { RadioPlaylist } from '@shared/navimix'
 import { toggleHiddenPlaylist, useHiddenPlaylists, useServerPlaylists } from '../playlists'
@@ -317,16 +330,29 @@ function Toggle({
 
 /**
  * The work area as a 3x2 grid of slots, each drawn as the little bar the window will become.
- * Reads faster than a dropdown, since the choice is about a place on screen.
+ * Reads faster than a dropdown, since the choice is about a place on screen. No slot is lit for
+ * a widget dragged somewhere of its own.
  */
-function AnchorPicker({ value, onChange }: { value: OverlayAnchor; onChange: (v: OverlayAnchor) => void }) {
+function AnchorPicker({
+  value,
+  onChange,
+  hint,
+  action
+}: {
+  value: OverlayAnchor | undefined
+  onChange: (v: OverlayAnchor) => void
+  hint?: string
+  action?: ReactNode
+}) {
   return (
     <div className="flex items-center justify-between gap-6 rounded-md px-3 py-3">
       <div>
         <div className="text-sm font-medium">Position</div>
         <div className="text-xs text-ink-2">
-          {OVERLAY_ANCHORS.find((a) => a.value === value)?.label} of the screen, clear of the taskbar.
+          {value ? `${OVERLAY_ANCHORS.find((a) => a.value === value)?.label} of the screen, clear of the taskbar.` : ''}
+          {hint ? ` ${hint}` : ''}
         </div>
+        {action}
       </div>
       <div className="grid h-[76px] w-[132px] shrink-0 grid-cols-3 grid-rows-2 gap-1 rounded-md border border-white/10 bg-black/40 p-1">
         {OVERLAY_ANCHORS.map((a) => {
@@ -351,33 +377,59 @@ function AnchorPicker({ value, onChange }: { value: OverlayAnchor; onChange: (v:
   )
 }
 
-/** Card fill: an opaque panel, or the system's frosted glass. */
-function BackgroundPicker({ value, onChange }: { value: OverlayBackground; onChange: (v: OverlayBackground) => void }) {
-  const chosen = OVERLAY_BACKGROUNDS.find((b) => b.value === value)
-  const degraded = value === 'acrylic' && !window.lyria.nativeAcrylic
+/** One of a few named options, as a segmented control. */
+function Choice<T extends string>({
+  label,
+  description,
+  options,
+  value,
+  onChange
+}: {
+  label: string
+  description?: string
+  options: { value: T; label: string }[]
+  value: T
+  onChange: (v: T) => void
+}) {
   return (
     <div className="flex items-center justify-between gap-6 rounded-md px-3 py-3">
       <div>
-        <div className="text-sm font-medium">Background</div>
-        <div className="text-xs text-ink-2">
-          {degraded ? 'Windows 11 blurs what is behind the window; here it falls back to a plain translucent card' : chosen?.hint}
-        </div>
+        <div className="text-sm font-medium">{label}</div>
+        {description && <div className="text-xs text-ink-2">{description}</div>}
       </div>
       <div className="flex shrink-0 rounded-md border border-white/10 p-0.5">
-        {OVERLAY_BACKGROUNDS.map((b) => (
+        {options.map((o) => (
           <button
-            key={b.value}
-            aria-pressed={b.value === value}
-            onClick={() => onChange(b.value)}
+            key={o.value}
+            aria-pressed={o.value === value}
+            onClick={() => onChange(o.value)}
             className={`rounded px-2.5 py-1 text-xs transition ${
-              b.value === value ? 'bg-accent font-semibold text-black' : 'text-ink-2 hover:text-ink'
+              o.value === value ? 'bg-accent font-semibold text-black' : 'text-ink-2 hover:text-ink'
             }`}
           >
-            {b.label}
+            {o.label}
           </button>
         ))}
       </div>
     </div>
+  )
+}
+
+/** Card fill: an opaque panel, or the system's frosted glass. */
+function BackgroundPicker({ value, onChange }: { value: OverlayBackground; onChange: (v: OverlayBackground) => void }) {
+  const degraded = value === 'acrylic' && !window.lyria.nativeAcrylic
+  return (
+    <Choice
+      label="Background"
+      description={
+        degraded
+          ? 'Windows 11 blurs what is behind the window; here it falls back to a plain translucent card'
+          : OVERLAY_BACKGROUNDS.find((b) => b.value === value)?.hint
+      }
+      options={OVERLAY_BACKGROUNDS}
+      value={value}
+      onChange={onChange}
+    />
   )
 }
 
@@ -409,66 +461,198 @@ function OpacitySlider({
   )
 }
 
-/** Everything about the taskbar widget except whether it is shown at all. */
-function TaskbarWidgetSettings({ value, onChange }: { value: WidgetOptions; onChange: (p: Partial<WidgetOptions>) => void }) {
+/** A run of related rows within a section, under a small heading of its own. */
+function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="mb-8">
-      <SectionHeader title="Taskbar widget" />
-      <AnchorPicker value={value.anchor} onChange={(anchor) => onChange({ anchor })} />
-      <Toggle
-        label="Compact view"
-        description="A shorter bar with just the title, for when it should stay out of the way"
-        checked={value.compact}
-        onChange={(compact) => onChange({ compact })}
-      />
-      <Toggle
-        label="Audio visualiser"
-        description="Live frequency bars behind the track details"
-        checked={value.visualizer}
-        onChange={(visualizer) => onChange({ visualizer })}
-      />
-      <Toggle
-        label="Album art"
-        description="Cover thumbnail on the left; click it to open Lyria"
-        checked={value.cover}
-        onChange={(cover) => onChange({ cover })}
-      />
-      <Toggle
-        label="Progress bar"
-        description="Thin line along the bottom edge showing how far into the track you are"
-        checked={value.progress}
-        onChange={(progress) => onChange({ progress })}
-      />
-      <Toggle
-        label="Elapsed time"
-        description="Show the position and length next to the controls"
-        checked={value.elapsed}
-        onChange={(elapsed) => onChange({ elapsed })}
-      />
-      <ChromeSettings
-        value={value}
-        onChange={onChange}
-        clickThroughHint="Clicks pass to whatever is behind the widget; its own buttons still work"
-      />
-    </section>
+    <div className="mt-3">
+      <h3 className="px-3 pb-1 text-[11px] font-semibold tracking-wide text-ink-3 uppercase">{title}</h3>
+      {children}
+    </div>
   )
 }
 
 /**
- * The look shared by every floating window. `clickThroughHint` doubles as the switch for the
- * hover and click-through rows: the toast never takes the mouse, so it passes none and gets
- * only the background and opacity.
+ * The taskbar widget as the options stand, playing whatever is playing: the very card the widget
+ * window draws, at its real size, on a stand-in for the desktop and in the slot it is anchored to.
+ * It sticks to the top while its section scrolls past, so every change below shows up in it; the
+ * page's own padding is taken back so it sticks flush, with nothing peeking out above it.
  */
-function ChromeSettings({
+function WidgetPreview({ o }: { o: WidgetOptions }) {
+  const { width, height } = widgetSize(o)
+  const [vertical, horizontal] = o.placement.kind === 'anchor' ? o.placement.anchor.split('-') : ['middle', 'center']
+  return (
+    <div className="sticky -top-6 z-10 mb-2 bg-surface-2 pt-3 pb-2">
+      <div
+        className={`flex h-[156px] overflow-hidden rounded-lg border border-white/10 p-3 ${
+          vertical === 'top' ? 'items-start' : vertical === 'bottom' ? 'items-end' : 'items-center'
+        } ${horizontal === 'left' ? 'justify-start' : horizontal === 'right' ? 'justify-end' : 'justify-center'}`}
+        style={{
+          background:
+            'radial-gradient(circle at 18% 28%, rgb(88 64 150 / 0.55), transparent 55%), radial-gradient(circle at 82% 78%, rgb(30 120 140 / 0.5), transparent 55%), #161616'
+        }}
+      >
+        <div className="shrink-0 transition-[width] duration-200" style={{ width, height, opacity: o.opacity }}>
+          <WidgetCard o={o} card={overlayCard(o.background)} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Everything about the taskbar widget except whether it is shown at all. */
+function TaskbarWidgetSettings({ value, onChange }: { value: WidgetOptions; onChange: (p: Partial<WidgetOptions>) => void }) {
+  const p = value.placement
+  return (
+    <section className="mb-8">
+      <SectionHeader title="Taskbar widget" />
+      <WidgetPreview o={value} />
+      <Group title="Layout">
+        <AnchorPicker
+          value={p.kind === 'anchor' ? p.anchor : undefined}
+          hint={
+            p.kind === 'free'
+              ? 'Where you dropped it. Let go near a corner or edge to snap back into place.'
+              : 'Drag the widget to move it anywhere.'
+          }
+          onChange={(anchor) => onChange({ placement: { kind: 'anchor', anchor } })}
+          action={
+            !(p.kind === 'anchor' && p.anchor === HOME_ANCHOR) && (
+              <button
+                className="mt-1.5 text-xs font-semibold text-accent hover:underline"
+                onClick={() => onChange({ placement: { kind: 'anchor', anchor: HOME_ANCHOR } })}
+              >
+                Reset position
+              </button>
+            )
+          }
+        />
+        <Choice
+          label="Size"
+          description={
+            value.size === 'small'
+              ? 'A slim bar with just the title, for when it should stay out of the way'
+              : value.size === 'medium'
+                ? 'Title and artist next to the controls'
+                : 'A bigger cover, the album too, and a seek bar you can click'
+          }
+          options={CARD_SIZES}
+          value={value.size}
+          onChange={(size) => onChange({ size })}
+        />
+      </Group>
+      <Group title="Shows">
+        <Toggle
+          label="Album art"
+          description="Cover thumbnail on the left; click it to open Lyria"
+          checked={value.cover}
+          onChange={(cover) => onChange({ cover })}
+        />
+        <Toggle
+          label={value.size === 'large' ? 'Seek bar' : 'Progress bar'}
+          description={
+            value.size === 'large'
+              ? 'How far into the track you are; click it to jump'
+              : 'Thin line along the bottom edge showing how far into the track you are'
+          }
+          checked={value.progress}
+          onChange={(progress) => onChange({ progress })}
+        />
+        <Toggle
+          label="Elapsed time"
+          description={
+            value.size === 'large' ? 'The position and length beside the seek bar' : 'The position and length next to the controls'
+          }
+          checked={value.elapsed}
+          onChange={(elapsed) => onChange({ elapsed })}
+        />
+        <ExtraButtonSettings value={value} onChange={onChange} />
+      </Group>
+      <Group title="Look">
+        <CoverLookSettings value={value} onChange={onChange} />
+        <Choice
+          label="Corners"
+          description={
+            nativeAcrylic(value.background)
+              ? 'Windows draws the corners of the acrylic backdrop itself'
+              : value.corners === 'pill'
+                ? 'Fully round ends, with a round cover to match'
+                : 'How rounded the card is'
+          }
+          options={CORNER_STYLES}
+          value={value.corners}
+          onChange={(corners) => onChange({ corners })}
+        />
+        <CardFillSettings value={value} onChange={onChange} />
+      </Group>
+      <Group title="Behaviour">
+        <PointerSettings
+          value={value}
+          onChange={onChange}
+          clickThroughHint="Clicks pass to whatever is behind the widget; its own buttons still work, but it cannot be dragged until this is off"
+        />
+      </Group>
+    </section>
+  )
+}
+
+/** The playing cover's colours on a floating player: the tint, and the visualiser drawn over it. */
+function CoverLookSettings({ value, onChange }: { value: PlayerLook; onChange: (p: Partial<PlayerLook>) => void }) {
+  return (
+    <>
+      <Toggle
+        label="Tint from cover art"
+        description="A wash of the playing cover's colour across the card, easing into the next one as tracks change"
+        checked={value.tint}
+        onChange={(tint) => onChange({ tint })}
+      />
+      <Choice
+        label="Visualiser"
+        description="Live levels of the music behind the track details"
+        options={VISUALIZER_STYLES}
+        value={value.visualizer}
+        onChange={(visualizer) => onChange({ visualizer })}
+      />
+      {value.visualizer !== 'off' && (
+        <Choice
+          label="Visualiser colour"
+          description={value.visualizerColor === 'cover' ? 'A bright take on the playing cover' : 'The colour it draws in'}
+          options={VISUALIZER_COLORS}
+          value={value.visualizerColor}
+          onChange={(visualizerColor) => onChange({ visualizerColor })}
+        />
+      )}
+    </>
+  )
+}
+
+/** The buttons a floating player can carry besides previous, play and next. */
+function ExtraButtonSettings({ value, onChange }: { value: PlayerLook; onChange: (p: Partial<PlayerLook>) => void }) {
+  return (
+    <>
+      <Toggle
+        label="Like button"
+        description="Save the playing song to Liked Songs, after the next button"
+        checked={value.like}
+        onChange={(like) => onChange({ like })}
+      />
+      <Toggle
+        label="Shuffle button"
+        description="Turn shuffle on and off, before the previous button"
+        checked={value.shuffle}
+        onChange={(shuffle) => onChange({ shuffle })}
+      />
+    </>
+  )
+}
+
+/** The card's fill, shared by every floating window. */
+function CardFillSettings({
   value,
-  onChange,
-  clickThroughHint
+  onChange
 }: {
-  value: Pick<OverlayChrome, 'background' | 'opacity'> & Partial<OverlayChrome>
+  value: Pick<OverlayChrome, 'background' | 'opacity'> & { fadeOnHover?: boolean }
   onChange: (p: Partial<OverlayChrome>) => void
-  clickThroughHint?: string
 }) {
-  const interactive = clickThroughHint !== undefined
   return (
     <>
       <BackgroundPicker value={value.background} onChange={(background) => onChange({ background })} />
@@ -479,31 +663,43 @@ function ChromeSettings({
         value={value.opacity}
         onChange={(opacity) => onChange({ opacity })}
       />
-      {interactive && (
-        <>
-          <Toggle
-            label="Fade when hovered"
-            description="Drop it further out of the way while the pointer is over it"
-            checked={value.fadeOnHover ?? false}
-            onChange={(fadeOnHover) => onChange({ fadeOnHover })}
-          />
-          {value.fadeOnHover && (
-            <OpacitySlider
-              label="Faded opacity"
-              description="Where it settles while hovered. Never brighter than the opacity above."
-              min={5}
-              value={value.hoverOpacity ?? 0.35}
-              onChange={(hoverOpacity) => onChange({ hoverOpacity })}
-            />
-          )}
-          <Toggle
-            label="Click through"
-            description={clickThroughHint}
-            checked={value.clickThrough ?? false}
-            onChange={(clickThrough) => onChange({ clickThrough })}
-          />
-        </>
+    </>
+  )
+}
+
+/** How a floating window the pointer can reach gets out of its way. The toast never takes the mouse. */
+function PointerSettings({
+  value,
+  onChange,
+  clickThroughHint
+}: {
+  value: OverlayChrome
+  onChange: (p: Partial<OverlayChrome>) => void
+  clickThroughHint: string
+}) {
+  return (
+    <>
+      <Toggle
+        label="Fade when hovered"
+        description="Drop it further out of the way while the pointer is over it"
+        checked={value.fadeOnHover}
+        onChange={(fadeOnHover) => onChange({ fadeOnHover })}
+      />
+      {value.fadeOnHover && (
+        <OpacitySlider
+          label="Faded opacity"
+          description="Where it settles while hovered. Never brighter than the opacity above."
+          min={5}
+          value={value.hoverOpacity}
+          onChange={(hoverOpacity) => onChange({ hoverOpacity })}
+        />
       )}
+      <Toggle
+        label="Click through"
+        description={clickThroughHint}
+        checked={value.clickThrough}
+        onChange={(clickThrough) => onChange({ clickThrough })}
+      />
     </>
   )
 }
@@ -512,11 +708,35 @@ function MiniPlayerSettings({ value, onChange }: { value: MiniOptions; onChange:
   return (
     <section className="mb-8">
       <SectionHeader title="Mini player" />
-      <ChromeSettings
-        value={value}
-        onChange={onChange}
-        clickThroughHint="Clicks pass to whatever is behind it; the controls still work, but it cannot be dragged until this is off"
-      />
+      <Group title="Layout">
+        <Choice
+          label="Size"
+          description={
+            value.size === 'small'
+              ? 'Title, artist and controls, with progress along the bottom edge'
+              : value.size === 'medium'
+                ? 'Title, artist, controls and a seek bar'
+                : 'A bigger cover, the album line and full-size buttons'
+          }
+          options={CARD_SIZES}
+          value={value.size}
+          onChange={(size) => onChange({ size })}
+        />
+      </Group>
+      <Group title="Shows">
+        <ExtraButtonSettings value={value} onChange={onChange} />
+      </Group>
+      <Group title="Look">
+        <CoverLookSettings value={value} onChange={onChange} />
+        <CardFillSettings value={value} onChange={onChange} />
+      </Group>
+      <Group title="Behaviour">
+        <PointerSettings
+          value={value}
+          onChange={onChange}
+          clickThroughHint="Clicks pass to whatever is behind it; the controls still work, but it cannot be dragged until this is off"
+        />
+      </Group>
     </section>
   )
 }
@@ -535,21 +755,31 @@ function ToastSettings({
   return (
     <section className="mb-8">
       <SectionHeader title="Track change toasts" />
-      <AnchorPicker value={value.anchor} onChange={(anchor) => onChange({ anchor })} />
-      <ChromeSettings value={value} onChange={onChange} />
-      <SliderRow
-        label="Duration"
-        description="How long each card stays on screen"
-        value={durationMs / 1000}
-        min={1.5}
-        max={8}
-        step={0.25}
-        inputMin={1}
-        inputMax={30}
-        inputStep={0.1}
-        unit="s"
-        onChange={(s) => onDuration(Math.round(s * 1000))}
-      />
+      <Group title="Layout">
+        <AnchorPicker value={value.anchor} onChange={(anchor) => onChange({ anchor })} />
+        <SliderRow
+          label="Duration"
+          description="How long each card stays on screen"
+          value={durationMs / 1000}
+          min={1.5}
+          max={8}
+          step={0.25}
+          inputMin={1}
+          inputMax={30}
+          inputStep={0.1}
+          unit="s"
+          onChange={(s) => onDuration(Math.round(s * 1000))}
+        />
+      </Group>
+      <Group title="Look">
+        <Toggle
+          label="Tint from cover art"
+          description="A wash of the new song's cover colour across the card"
+          checked={value.tint}
+          onChange={(tint) => onChange({ tint })}
+        />
+        <CardFillSettings value={value} onChange={onChange} />
+      </Group>
     </section>
   )
 }

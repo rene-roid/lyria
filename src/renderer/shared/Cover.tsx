@@ -1,7 +1,7 @@
 import { Music2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { localArtUrl } from '@shared/art'
-import { headerColor } from '@shared/color'
+import { glowColor, headerColor } from '@shared/color'
 import { useClient, useSettings } from './sessionStore'
 
 /**
@@ -21,19 +21,23 @@ export function useCoverUrl(id: string | undefined, size = 300): string | undefi
   return useCoverUrls(id, size)[0]
 }
 
-const colors = new Map<string, string>()
+/** Two colours picked from a cover's own pixels: `header` for white text to sit on, `glow` to light up a dark card. */
+export interface CoverColors {
+  header: string
+  glow: string
+}
 
-/**
- * The colour a page paints behind a cover: picked from the cover's own pixels, as navidroid and
- * the server's web UI tint their headers. `fallback` shows until it is known, and stays for a
- * cover that never loads.
- */
-export function useCoverColor(id: string | undefined, fallback = '#535353'): string {
+const colors = new Map<string, CoverColors>()
+
+const css = ([r, g, b]: number[]): string => `rgb(${r}, ${g}, ${b})`
+
+/** A cover's colours, once its image has been read; undefined until then and for a cover that never loads. */
+export function useCoverColors(id: string | undefined): CoverColors | undefined {
   const url = useCoverUrl(id, 64)
-  const [color, setColor] = useState(() => (id && colors.get(id)) || fallback)
+  const [found, setFound] = useState(() => (id ? colors.get(id) : undefined))
   useEffect(() => {
-    const known = id && colors.get(id)
-    if (known || !id || !url) return setColor(known || fallback)
+    const known = id ? colors.get(id) : undefined
+    if (known || !id || !url) return setFound(known)
     let live = true
     const img = new Image()
     img.crossOrigin = 'anonymous'
@@ -41,16 +45,45 @@ export function useCoverColor(id: string | undefined, fallback = '#535353'): str
       const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
       if (!ctx) return
       ctx.drawImage(img, 0, 0, 24, 24)
-      const [r, g, b] = headerColor(ctx.getImageData(0, 0, 24, 24).data)
-      colors.set(id, `rgb(${r} ${g} ${b})`)
-      if (live) setColor(colors.get(id)!)
+      const px = ctx.getImageData(0, 0, 24, 24).data
+      colors.set(id, { header: css(headerColor(px)), glow: css(glowColor(px)) })
+      if (live) setFound(colors.get(id))
     }
     img.src = url
     return () => {
       live = false
     }
-  }, [id, url, fallback])
-  return color
+  }, [id, url])
+  return id ? found : undefined
+}
+
+/**
+ * The colour a page paints behind a cover, as navidroid and the server's web UI tint their
+ * headers. `fallback` shows until it is known, and stays for a cover that never loads.
+ */
+export function useCoverColor(id: string | undefined, fallback = '#535353'): string {
+  return useCoverColors(id)?.header ?? fallback
+}
+
+/**
+ * A wash of the playing cover's colour over a floating card, strongest on the cover's side.
+ * It keeps the last colour while the next cover is read, so a track change eases from one hue
+ * straight to the next instead of dipping through grey.
+ */
+export function CoverTint({ id }: { id: string | undefined }) {
+  const color = useCoverColors(id)?.header
+  const [shown, setShown] = useState(color)
+  if (color && color !== shown) setShown(color)
+  return (
+    <div
+      className="pointer-events-none absolute inset-0"
+      style={{
+        backgroundColor: id && shown ? shown : 'transparent',
+        transition: 'background-color 800ms ease',
+        maskImage: 'linear-gradient(90deg, rgb(0 0 0 / 0.8), rgb(0 0 0 / 0.3))'
+      }}
+    />
+  )
 }
 
 /** How long a cover none of whose sources loaded waits before trying them again, and how many times. */

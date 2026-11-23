@@ -99,6 +99,7 @@ export function TrackList({
       setStarred((s) => ({ ...s, [t.id]: next }))
       try {
         await (next ? client.star(t.id) : client.unstar(t.id))
+        player.setStarred(t.id, next)
       } catch {
         setStarred((s) => ({ ...s, [t.id]: !next }))
       }
@@ -130,6 +131,7 @@ export function TrackList({
     mark(next)
     try {
       await (next ? client.star(ids) : client.unstar(ids))
+      for (const id of ids) player.setStarred(id, next)
     } catch {
       mark(!next)
     }
