@@ -671,6 +671,12 @@ function ToastSettings({
     <section className="mb-8">
       <SectionHeader title="Track change toasts" />
       <AnchorPicker value={value.anchor} onChange={(anchor) => onChange({ anchor })} />
+      <Toggle
+        label="Tint from cover art"
+        description="A wash of the new song's cover colour across the card"
+        checked={value.tint}
+        onChange={(tint) => onChange({ tint })}
+      />
       <ChromeSettings value={value} onChange={onChange} />
       <SliderRow
         label="Duration"

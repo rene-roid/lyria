@@ -1,8 +1,10 @@
+import { ListEnd } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { Track } from '@shared/types'
+import { upNext, type Track } from '@shared/types'
 import { bootstrap } from '@renderer/shared/bootstrap'
-import { Cover } from '@renderer/shared/Cover'
+import { Cover, CoverTint } from '@renderer/shared/Cover'
 import { nativeAcrylic, overlayCard } from '@renderer/shared/overlay'
+import { usePlayerState } from '@renderer/shared/playerStore'
 import { useSettings } from '@renderer/shared/sessionStore'
 
 interface ToastItem {
@@ -16,6 +18,7 @@ function ToastApp() {
   const [item, setItem] = useState<ToastItem | null>(null)
   const [leaving, setLeaving] = useState(false)
   const timer = useRef<number | undefined>(undefined)
+  const next = usePlayerState(upNext)
 
   useEffect(() => {
     return window.lyria.toast.onShow(({ track, durationMs }) => {
@@ -43,9 +46,9 @@ function ToastApp() {
     >
       <div
         key={item.key}
-        className={`${overlayCard(o.background)} flex w-full items-center gap-3 p-3 ${native ? 'h-full' : ''} ${
-          leaving ? 'toast-out' : 'toast-in'
-        }`}
+        className={`${overlayCard(o.background)} relative flex w-full items-center gap-3 overflow-hidden p-3 ${
+          native ? 'h-full' : ''
+        } ${leaving ? 'toast-out' : 'toast-in'}`}
         onAnimationEnd={() => {
           if (leaving) {
             setItem(null)
@@ -53,15 +56,27 @@ function ToastApp() {
           }
         }}
       >
+        {o.tint && <CoverTint id={track.coverArt} />}
         <Cover id={track.coverArt} size={160} className="h-[76px] w-[76px]" />
-        <div className="min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1">
           <div className="mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-accent">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
             Now playing
           </div>
           <div className="truncate text-[15px] font-semibold leading-tight text-ink">{track.title}</div>
-          <div className="truncate text-[13px] text-ink-2">{track.artist}</div>
-          {track.album && <div className="truncate text-[12px] text-ink-3">{track.album}</div>}
+          <div className="truncate text-[13px] text-ink-2">
+            {track.artist}
+            {track.album && <span className="text-ink-3"> · {track.album}</span>}
+          </div>
+          {next && (
+            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11.5px] text-ink-3">
+              <ListEnd size={12} className="shrink-0" />
+              <span className="shrink-0 font-semibold text-ink-2">Up next</span>
+              <span className="truncate">
+                {next.title} · {next.artist}
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>

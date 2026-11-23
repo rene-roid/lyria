@@ -82,6 +82,15 @@ export const initialPlayerState: PlayerState = {
   shuffle: false
 }
 
+/**
+ * The song that plays once the current one ends: the next in the queue, or the first again on
+ * repeat-all. Repeat-one plays the same song again, so nothing is coming up.
+ */
+export function upNext(s: Pick<PlayerState, 'queue' | 'index' | 'repeat'>): Track | undefined {
+  if (s.repeat === 'one' || s.index < 0) return undefined
+  return s.queue[s.index + 1] ?? (s.repeat === 'all' && s.queue.length > 1 ? s.queue[0] : undefined)
+}
+
 /** `track` with the like a `starChanged` event reports, when it is the song that changed. */
 export function starredCopy<T extends Track | null>(track: T, id: string, starred: boolean): T {
   return track?.id === id ? { ...track, starred } : track
@@ -479,14 +488,15 @@ export interface MiniOptions extends OverlayChrome, PlayerLook {
 export const defaultMiniOptions: MiniOptions = { ...defaultOverlayChrome, ...defaultPlayerLook, size: 'medium' }
 
 /** Track-change toast. It never takes the mouse, so only the card's look and its corner apply. */
-export interface ToastOptions extends Pick<OverlayChrome, 'background' | 'opacity'> {
+export interface ToastOptions extends Pick<OverlayChrome, 'background' | 'opacity'>, Pick<PlayerLook, 'tint'> {
   anchor: OverlayAnchor
 }
 
 export const defaultToastOptions: ToastOptions = {
   anchor: 'bottom-right',
   background: 'solid',
-  opacity: 1
+  opacity: 1,
+  tint: false
 }
 
 /** Width an optional shuffle or like button adds: one compact button and the gap before it. */

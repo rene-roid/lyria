@@ -108,6 +108,7 @@ export function sanitizeToast(saved: Partial<ToastOptions> | undefined): ToastOp
   return {
     anchor: isAnchor(o.anchor) ? o.anchor : defaultToastOptions.anchor,
     background: BACKGROUND_SET.has(o.background) ? o.background : defaultToastOptions.background,
-    opacity: clamp(o.opacity, 0.35, 1, defaultToastOptions.opacity)
+    opacity: clamp(o.opacity, 0.35, 1, defaultToastOptions.opacity),
+    tint: bool(o.tint, defaultToastOptions.tint)
   }
 }
