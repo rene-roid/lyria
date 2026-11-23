@@ -40,6 +40,10 @@ function readSettings(): Settings {
     windowBounds: { ...(saved.windowBounds ?? {}) },
     autoplay: typeof saved.autoplay === 'boolean' ? saved.autoplay : defaultSettings.autoplay,
     resume: sanitizeResume(saved.resume),
+    blocked: {
+      songs: (saved.blocked?.songs ?? []).filter((e) => e?.id),
+      artists: (saved.blocked?.artists ?? []).filter((e) => e?.id)
+    },
     // Entries written before the shelf stored an origin have no key and cannot be played.
     recents: (saved.recents ?? []).filter((r) => r?.key),
     savedMixes: (saved.savedMixes ?? []).filter((m) => m?.id && m.tracks?.length),

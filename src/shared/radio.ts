@@ -5,7 +5,7 @@
  * seeds' genres and then from random songs, the way an artist mix fills up from its artist's genres.
  */
 import type { SubsonicClient } from './subsonic/client'
-import type { Track } from './types'
+import { isBlocked, unblocked, type Blocked, type Track } from './types'
 import { interleave, sameArtist, shuffle, spread, tally } from './shuffle'
 
 /** The calls a radio makes; the Subsonic client, or a stand-in for one. */
@@ -17,6 +17,7 @@ export interface RadioRequest {
   count: number
   /** Ids never to hand back: everything already in the queue. */
   exclude: ReadonlySet<string>
+  blocked: Blocked
   /** The same seed deals the same radio. */
   shuffleSeed: string
   /** Which of `ids` can play: offline, the ones with a copy on this device. Absent, all of them. */
@@ -49,7 +50,7 @@ const none = (): Track[] => []
  * Each rung only runs while the ones before it left the list short.
  */
 export async function radio(source: RadioSource, req: RadioRequest): Promise<Track[]> {
-  const { seeds, count, exclude, shuffleSeed } = req
+  const { seeds, count, exclude, blocked, shuffleSeed } = req
   if (!seeds.length) return []
   const rungs = [
     () => similar(source, seeds, count, shuffleSeed),
@@ -60,7 +61,7 @@ export async function radio(source: RadioSource, req: RadioRequest): Promise<Tra
   let out: Track[] = []
   for (const rung of rungs) {
     // An endpoint the server lacks, or a server out of reach, just means the next rung.
-    const fresh = (await rung().catch(none)).filter((t) => !exclude.has(t.id))
+    const fresh = (await rung().catch(none)).filter((t) => !exclude.has(t.id) && !isBlocked(blocked, t))
     const here = req.playable && new Set(await req.playable(fresh.map((t) => t.id)))
     pool.push(...(here ? fresh.filter((t) => here.has(t.id)) : fresh))
     out = spread(pool, count, PER_ARTIST)
@@ -77,21 +78,23 @@ export async function radio(source: RadioSource, req: RadioRequest): Promise<Tra
 export async function artistRadio(
   source: RadioSource,
   artist: { id: string; name: string; songs: Track[] },
+  blocked: Blocked,
   day = new Date().toDateString()
 ): Promise<Track[]> {
   const seed = `artistRadio:${artist.id}:${day}`
   const theirs = (t: Track): boolean => t.artistId === artist.id || sameArtist(t.artist, artist.name)
+  const others = (t: Track): boolean => !theirs(t) && !isBlocked(blocked, t)
   const [similar, top] = await Promise.all([
     source.getSimilarSongs2(artist.id, ARTIST_SIMILAR).catch(none),
     source.getTopSongs(artist.name, TOP_SONGS).catch(none)
   ])
-  const alike = similar.filter((t) => !theirs(t))
+  const alike = similar.filter(others)
   if (alike.length < ARTIST_SIMILAR_ENOUGH) {
     const genres = tally(artist.songs.map((t) => t.genre)).slice(0, 2)
     const pulls = await Promise.all(genres.map((g) => source.getSongsByGenre(g, GENRE_POOL).catch(none)))
-    for (const pull of pulls) alike.push(...shuffle(pull.filter((t) => !theirs(t)), seed).slice(0, ARTIST_GENRE_FILL))
+    for (const pull of pulls) alike.push(...shuffle(pull.filter(others), seed).slice(0, ARTIST_GENRE_FILL))
   }
-  const own = [...top.filter(theirs).slice(0, ARTIST_TOP), ...shuffle(artist.songs, seed)]
+  const own = unblocked([...top.filter(theirs).slice(0, ARTIST_TOP), ...shuffle(artist.songs, seed)], blocked)
   const lead = spread(own, ARTIST_RADIO_OWN, ARTIST_RADIO_OWN)
   const rest = ARTIST_RADIO_LENGTH - lead.length
   return interleave(lead, spread(shuffle(alike, seed), rest, rest), ARTIST_RADIO_LENGTH, 3)

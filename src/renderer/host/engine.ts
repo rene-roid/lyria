@@ -1,4 +1,5 @@
 import type {
+  Blocked,
   NormalizeMode,
   PlayerCommandName,
   PlayerCommands,
@@ -7,7 +8,7 @@ import type {
   ResumeState,
   Track
 } from '@shared/types'
-import { nextPlayable, replayGainFactor, sanitizeResume } from '@shared/types'
+import { NO_BLOCKS, isBlocked, nextPlayable, replayGainFactor, sanitizeResume } from '@shared/types'
 import type { SubsonicClient } from '@shared/subsonic/client'
 import { clamp } from '@shared/format'
 import { radio } from '@shared/radio'
@@ -60,6 +61,8 @@ export class AudioEngine {
   private online = true
   /** Top the queue up with songs like the last few heard once its last song is playing. */
   private autoplay = true
+  /** Songs and artists never to play, whatever queue they turn up in. */
+  private blocked: Blocked = NO_BLOCKS
   /**
    * Queue entries autoplay put there. Marked by entry rather than position so the mark survives
    * removals and reorders; the run of them that ends the queue is what the queue panel heads.
@@ -192,6 +195,12 @@ export class AudioEngine {
     this.maybeAutoplay()
   }
 
+  /** Takes effect from the next song on; the one playing carries on. */
+  setBlocked(blocked: Blocked): void {
+    this.blocked = blocked
+    this.maybeAutoplay()
+  }
+
   restore(opts: {
     volume: number
     muted: boolean
@@ -199,12 +208,14 @@ export class AudioEngine {
     shuffle: boolean
     normalize: NormalizeMode
     autoplay: boolean
+    blocked: Blocked
     resume?: ResumeState | null
   }): void {
     this.audio.volume = clamp(opts.volume, 0, 1)
     this.audio.muted = opts.muted
     this.normalize = opts.normalize
     this.autoplay = opts.autoplay
+    this.blocked = opts.blocked
     this.repeat = opts.repeat
     this.shuffle = opts.shuffle
     this.emit('volumeChanged', { volume: this.audio.volume, muted: this.audio.muted })
@@ -390,20 +401,32 @@ export class AudioEngine {
   }
 
   /**
-   * Load the song at `index`. Offline, that is the nearest one from there that is on this device,
-   * looking the way `step` points, so the queue plays what it can rather than erroring song by song.
+   * Load the nearest song from `index` on, looking the way `step` points, that can play: never a
+   * blocked one, and offline only one on this device, so the queue plays what it can rather than
+   * erroring song by song.
    */
   private load(index: number, autoplay: boolean, seek = 0, step: 1 | -1 = 1): void {
-    if (this.online || !this.available || !this.client) return this.open(index, autoplay, seek)
+    const pick = (can: (t: Track) => boolean): number | undefined =>
+      nextPlayable(this.queue.length, index, step, this.repeat === 'all', (i) => {
+        const t = this.queue[i]
+        return !isBlocked(this.blocked, t) && can(t)
+      })
+    const go = (at: number): void => this.open(at, autoplay, at === index ? seek : 0)
+    if (this.online || !this.available || !this.client) {
+      const at = pick(() => true)
+      if (at !== undefined) go(at)
+      else if (step === 1) this.ranOut()
+      return
+    }
     const token = (this.localToken += 1)
     void this.available(this.queue.map((t) => t.id))
       .catch((): string[] => [])
       .then((ids) => {
         if (token !== this.localToken) return
         const local = new Set(ids)
-        const at = nextPlayable(this.queue.length, index, step, this.repeat === 'all', (i) => local.has(this.queue[i].id))
+        const at = pick((t) => local.has(t.id))
         if (at === undefined) this.nothingOnDevice(clamp(index, 0, this.queue.length - 1))
-        else this.open(at, autoplay, at === index ? seek : 0)
+        else go(at)
       })
   }
 
@@ -530,11 +553,7 @@ export class AudioEngine {
     let nextIndex = this.index + 1
     if (nextIndex >= this.queue.length) {
       if (this.repeat === 'all' || userInitiated) nextIndex = 0
-      else {
-        // Autoplay is still looking: wait at the end, and its answer carries on from there.
-        if (this.ask?.answered !== false) this.rewind()
-        return
-      }
+      else return this.ranOut()
     }
     const shouldPlay = userInitiated ? !this.audio.paused || this.audio.ended || this.audio.currentTime === 0 : true
     this.load(nextIndex, shouldPlay)
@@ -581,6 +600,12 @@ export class AudioEngine {
     else void this.client.scrobble(track.id, true).catch(() => undefined)
   }
 
+  /** Nothing further in the queue can play. */
+  private ranOut(): void {
+    // Autoplay is still looking: wait at the end, and its answer carries on from there.
+    if (this.ask?.answered !== false) this.rewind()
+  }
+
   /** Rest on the last song, paused back at its start, once the queue has run out. */
   private rewind(): void {
     this.audio.pause()
@@ -609,11 +634,16 @@ export class AudioEngine {
     return i
   }
 
-  /** With autoplay on, ask for more once the last song in the queue is playing, once per song. */
+  /**
+   * With autoplay on, ask for more once nothing after the playing song can play (it is the last,
+   * or the rest are blocked), once per song.
+   */
   private maybeAutoplay(): void {
-    const last = this.queue[this.queue.length - 1]
-    if (!this.autoplay || this.repeat !== 'off' || this.audio.paused || !last || this.current !== last) return
-    if (this.ask && (!this.ask.answered || this.ask.after === last)) return
+    const cur = this.current
+    if (!this.autoplay || this.repeat !== 'off' || this.audio.paused || !cur) return
+    if (this.ask && (!this.ask.answered || this.ask.after === cur)) return
+    const ahead = nextPlayable(this.queue.length, this.index + 1, 1, false, (i) => !isBlocked(this.blocked, this.queue[i]))
+    if (ahead !== undefined) return
     // The songs heard last, the playing one first.
     const seeds = this.queue.slice(Math.max(0, this.index + 1 - AUTOPLAY_SEEDS), this.index + 1).reverse()
     this.askFor(seeds, AUTOPLAY_COUNT, true)
@@ -633,6 +663,7 @@ export class AudioEngine {
       seeds,
       count,
       exclude: new Set(this.queue.map((t) => t.id)),
+      blocked: this.blocked,
       shuffleSeed: `${seeds[0].id}:${Date.now()}`,
       playable: this.online ? undefined : this.available
     })
