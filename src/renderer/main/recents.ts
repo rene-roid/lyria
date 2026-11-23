@@ -8,6 +8,7 @@ import { useSessionStore } from '@renderer/shared/sessionStore'
 import { mapLimit } from '@shared/async'
 import { allAlbums } from './albumList'
 import { ALBUM_FETCH_LIMIT, buildMix, librarySources, mixKey, seedOfView } from './mixes'
+import { artistRadio } from '@shared/radio'
 import { loadPlaylist } from './downloads'
 import { cachedOr } from './offline'
 import { findSavedMix } from './savedMixes'
@@ -67,6 +68,17 @@ export function playRadio(track: Track): void {
   remember(item)
 }
 
+/** An artist's radio on Home's shelf: the tile opens their page and its play button plays the radio. */
+export function artistRadioRecent(artist: ArtistID3): RecentItem {
+  const view: View = { name: 'artist', id: artist.id }
+  return { key: `artistRadio:${artist.id}`, title: `${artist.name} Radio`, subtitle: artist.name, coverArt: artist.coverArt ?? artist.id, view, radio: true }
+}
+
+/** Today's radio for an artist, built around everything they are on. */
+export async function artistRadioTracks(c: SubsonicClient, artist: ArtistID3 & { album: AlbumID3[] }): Promise<Track[]> {
+  return artistRadio(c, { id: artist.id, name: artist.name, songs: await artistTracks(c, artist) })
+}
+
 /** Whether the queue came from `key`, and whether it is playing right now. */
 export function usePlayingState(key: string | undefined): { current: boolean; playing: boolean } {
   const current = usePlayingFrom((s) => key !== undefined && s.key === key)
@@ -119,6 +131,7 @@ export async function albumSongs(client: SubsonicClient, ids: string[]): Promise
 export async function loadRecent(c: SubsonicClient, r: RecentItem): Promise<Track[]> {
   const v = r.view
   if (!v) return r.track ? [r.track] : []
+  if (r.radio && v.name === 'artist') return artistRadioTracks(c, await c.getArtist(v.id))
   switch (v.name) {
     case 'album':
       return albumSongs(c, [v.id, ...(v.discIds ?? [])])

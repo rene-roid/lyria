@@ -245,15 +245,24 @@ export function viewKey(v: View): string {
  * started a play from, or the song itself when it was played on its own.
  */
 export interface RecentItem {
-  /** `viewKey(view)`, `track:<id>` for a lone song, or `radio:<id>` for a song radio. */
+  /**
+   * `viewKey(view)`, `track:<id>` for a lone song, `radio:<id>` for a song radio, or
+   * `artistRadio:<id>` for an artist radio.
+   */
   key: string
   title: string
   subtitle?: string
   coverArt?: string
-  /** The place played from. Absent for a lone song or a song radio, which `track` holds instead. */
+  /**
+   * The place played from, or the artist page of an artist radio. Absent for a lone song or a song
+   * radio, which `track` holds instead.
+   */
   view?: View
   track?: Track
-  /** `track` started a song radio, so playing the tile starts the radio again, not the song alone. */
+  /**
+   * Playing the tile starts a radio again rather than its songs alone: `track`'s, or the artist's
+   * whose page `view` is.
+   */
   radio?: true
 }
 
