@@ -262,11 +262,13 @@ export function createMiniWindow(): BrowserWindow {
   const saved = savedBounds('mini')
   const a = workArea()
   const size = miniSize(getSettings().mini)
+  // Saved at whatever size it had then; the size option may have grown it since.
+  const at = saved ? clampInto({ ...saved, ...size }, screen.getDisplayMatching(saved).workArea) : undefined
   const win = new BrowserWindow({
     ...baseOptions('mini'),
     ...size,
-    x: saved?.x ?? a.x + a.width - size.width - EDGE,
-    y: saved?.y ?? a.y + EDGE,
+    x: at?.x ?? a.x + a.width - size.width - EDGE,
+    y: at?.y ?? a.y + EDGE,
     ...surfaceOptions('mini'),
     frame: false,
     alwaysOnTop: true,
@@ -516,7 +518,10 @@ export function resizeMini(): void {
   const b = win.getBounds()
   const size = miniSize(getSettings().mini)
   if (b.width === size.width && b.height === size.height) return
-  setFixedBounds(win, clampInto({ ...b, ...size }, screen.getDisplayMatching(b).workArea))
+  const r = clampInto({ ...b, ...size }, screen.getDisplayMatching(b).workArea)
+  setFixedBounds(win, r)
+  // Only a drag reports `moved`, so a corner pulled in to fit has to be saved here.
+  updateSettings({ windowBounds: { mini: r } })
 }
 
 /** The slot the widget would snap into if let go of now; the page outlines itself while there is one. */
