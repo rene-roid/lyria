@@ -2,7 +2,7 @@ import { Eye, EyeOff, Heart, Shuffle } from 'lucide-react'
 import { parseMix } from '@shared/navimix'
 import { useMemo, useState } from 'react'
 import { filterTracks, formatDuration } from '@shared/format'
-import { useClient } from '@renderer/shared/sessionStore'
+import { useClient, useSessionStore } from '@renderer/shared/sessionStore'
 import { player } from '@renderer/shared/playerStore'
 import { Cover, useCoverColor } from '@renderer/shared/Cover'
 import { TrackList } from '../components/TrackList'
@@ -18,6 +18,7 @@ import { downloadKey } from '@shared/types'
 
 export function PlaylistView({ id }: { id: string }) {
   const client = useClient()
+  const username = useSessionStore((s) => s.session?.username)
   const offline = useOffline()
   // Offline in the deps, so a download's kept copy shows when the server goes and the live one on its return.
   const state = useAsync(`playlist:${id}`, () => (client ? loadPlaylist(client, id) : undefined), [client, id, offline])
@@ -38,6 +39,7 @@ export function PlaylistView({ id }: { id: string }) {
   const origin = playlistRecent(pl)
   // A NaviBeat or Explo mix keeps the title, colour, artwork and blurb the web UI gives it.
   const mix = parseMix(pl.name, pl.comment)
+  const mine = !pl.owner || pl.owner === username
 
   return (
     <div>
@@ -103,11 +105,12 @@ export function PlaylistView({ id }: { id: string }) {
         tracks={shown}
         origin={origin}
         removeLabel="Remove from this playlist"
-        // A mix is rewritten by its plugin, so an edit to it would not last; offline, there is no one to tell.
-        onRemove={mix || offline ? undefined : async (i) => {
+        // A mix is rewritten by its plugin, so an edit to it would not last; offline, there is no one to
+        // tell; and the server only takes edits to a playlist from its owner.
+        onRemove={mix || offline || !mine ? undefined : async (rows) => {
           if (!client) return
-          // `i` counts the filtered rows; the server wants the song's place in the whole playlist.
-          await client.updatePlaylist(id, { songIndexToRemove: [songs.indexOf(shown[i])] })
+          // `rows` counts the filtered rows; the server wants each song's place in the whole playlist.
+          await client.updatePlaylist(id, { songIndexToRemove: rows.map((i) => songs.indexOf(shown[i])) })
           state.reload()
         }}
       />
