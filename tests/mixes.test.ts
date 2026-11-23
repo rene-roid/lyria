@@ -64,6 +64,8 @@ function fakeFetch(): (url: string) => Promise<Response> {
 }
 
 const client = new SubsonicClient(session, fakeFetch())
+/** Builds are kept per client for the day, so a repeat on a new client is built again rather than remembered. */
+const rebuilt = (): SubsonicClient => new SubsonicClient(session, fakeFetch())
 
 const ids = (tracks: { id: string }[]): string[] => tracks.map((t) => t.id)
 
@@ -102,7 +104,7 @@ describe('genre mixes', () => {
     expect([...countByArtist(mix).values()].every((n) => n <= 2)).toBe(true)
     expect(mix.length).toBe(6) // 3 artists x 2
     expect(new Set(ids(mix)).size).toBe(mix.length)
-    expect(ids(await buildMix(client, { kind: 'genre', value: 'rock' }))).toEqual(ids(mix))
+    expect(ids(await buildMix(rebuilt(), { kind: 'genre', value: 'rock' }))).toEqual(ids(mix))
     // A different seed draws a different set from the same pool.
     expect(ids(await buildMix(client, { kind: 'genre', value: 'jazz' }))).not.toEqual(ids(mix))
   })
@@ -115,7 +117,7 @@ describe('mood mixes', () => {
     expect(mix.length).toBe(20)
     expect(mix.every((t) => t.id.startsWith('a1-') || t.id.startsWith('a2-'))).toBe(true)
     expect([...countByArtist(mix).values()].every((n) => n <= 2)).toBe(true)
-    expect(ids(await buildMix(client, { kind: 'mood', value: 'chill' }))).toEqual(ids(mix))
+    expect(ids(await buildMix(rebuilt(), { kind: 'mood', value: 'chill' }))).toEqual(ids(mix))
   })
 
   test('a mood is its own seed, not the genre of the same name', async () => {
@@ -151,7 +153,7 @@ describe('artist mixes', () => {
 
   test('stay stable within the day', async () => {
     const mix = await buildMix(client, { kind: 'artist', value: 'Nova' })
-    expect(ids(await buildMix(client, { kind: 'artist', value: 'Nova' }))).toEqual(ids(mix))
+    expect(ids(await buildMix(rebuilt(), { kind: 'artist', value: 'Nova' }))).toEqual(ids(mix))
   })
 
   test('an artist the server does not know yields an empty mix', async () => {
