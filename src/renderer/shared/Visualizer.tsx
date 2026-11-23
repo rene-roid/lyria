@@ -156,13 +156,19 @@ export function Visualizer({
   return <canvas ref={canvasRef} className={className} />
 }
 
+/**
+ * Bars on the bottom edge keep a stub when quiet, which reads as a baseline. Mirrored bars sit
+ * across the middle of the card, where stubs would be a dotted line through the title, so a quiet
+ * band there draws nothing.
+ */
 function drawBars(ctx: CanvasRenderingContext2D, c: Float32Array, w: number, h: number, mirror: boolean): void {
   const n = c.length
   const gap = Math.max(1, w / n / 4)
   const bw = (w - gap * (n - 1)) / n
   for (let i = 0; i < n; i++) {
-    const v = Math.max(0.04, c[i])
-    const bh = Math.max(2, v * h)
+    const v = mirror ? c[i] : Math.max(0.04, c[i])
+    const bh = mirror ? v * h : Math.max(2, v * h)
+    if (bh < 1) continue
     const x = i * (bw + gap)
     const y = mirror ? (h - bh) / 2 : h - bh
     ctx.globalAlpha = 0.35 + v * 0.65
@@ -171,15 +177,15 @@ function drawBars(ctx: CanvasRenderingContext2D, c: Float32Array, w: number, h: 
 }
 
 /**
- * The levels as a ribbon about the middle, swelling where the music is loud: a soft fill with a
- * brighter edge. Each stretch between two levels is a curve through their midpoint, so the
- * outline stays smooth however few levels there are.
+ * The levels as a ribbon about the middle, swelling where the music is loud and pinching to
+ * nothing where it is quiet, brightest along its spine. Each stretch between two levels is a
+ * curve through their midpoint, so the outline stays smooth however few levels there are.
  */
 function drawWave(ctx: CanvasRenderingContext2D, c: Float32Array, w: number, h: number): void {
   const n = c.length
   const mid = h / 2
   const step = w / (n - 1)
-  const amp = (i: number): number => Math.max(0.03, c[i]) * mid * 0.92
+  const amp = (i: number): number => c[i] * mid * 0.92
   const top = (i: number): number => mid - amp(i)
   const bottom = (i: number): number => mid + amp(n - 1 - i)
   const along = (i: number): number => i * step
@@ -188,14 +194,15 @@ function drawWave(ctx: CanvasRenderingContext2D, c: Float32Array, w: number, h: 
   smooth(ctx, n, along, top, true)
   smooth(ctx, n, back, bottom, false)
   ctx.closePath()
-  ctx.globalAlpha = 0.45
+  const spine = ctx.createLinearGradient(0, 0, 0, h)
+  spine.addColorStop(0, 'rgba(255, 255, 255, 0.25)')
+  spine.addColorStop(0.5, 'rgba(255, 255, 255, 1)')
+  spine.addColorStop(1, 'rgba(255, 255, 255, 0.25)')
   ctx.fill()
-  ctx.beginPath()
-  smooth(ctx, n, along, top, true)
-  smooth(ctx, n, back, bottom, true)
-  ctx.lineWidth = Math.max(1, h / 40)
-  ctx.globalAlpha = 0.9
-  ctx.stroke()
+  ctx.globalCompositeOperation = 'destination-in'
+  ctx.fillStyle = spine
+  ctx.fillRect(0, 0, w, h)
+  ctx.globalCompositeOperation = 'source-over'
 }
 
 /** A curve through the midpoints of the points `(x(i), y(i))`, starting a new outline or carrying one on. */

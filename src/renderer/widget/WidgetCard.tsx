@@ -48,7 +48,7 @@ export function WidgetCard({
       <CardBackdrop look={o} coverId={track?.coverArt} bars={40} />
       {o.cover && (
         <button
-          className={`relative shrink-0 overflow-hidden ${pill ? 'rounded-full' : 'rounded-md'}`}
+          className={`relative shrink-0 overflow-hidden shadow-[0_2px_8px_rgb(0_0_0/0.35)] ${pill ? 'rounded-full' : 'rounded-md'}`}
           style={{ height: l.cover, width: l.cover }}
           onClick={openMain}
           title="Open Lyria"
@@ -90,7 +90,7 @@ export function WidgetCard({
           <div className="relative shrink-0">
             <TransportControls compact size={o.size === 'small' ? 13 : 15} shuffle={o.shuffle} like={o.like} />
           </div>
-          {o.progress && <ProgressLine />}
+          {o.progress && <ProgressLine inset={pill ? l.height / 2 : 0} />}
         </>
       )}
       {snapping && <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-2 ring-accent ring-inset" />}

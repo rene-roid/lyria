@@ -80,7 +80,7 @@ export function CoverTint({ id }: { id: string | undefined }) {
       style={{
         backgroundColor: id && shown ? shown : 'transparent',
         transition: 'background-color 800ms ease',
-        maskImage: 'linear-gradient(90deg, rgb(0 0 0 / 0.95), rgb(0 0 0 / 0.4))'
+        maskImage: 'linear-gradient(90deg, rgb(0 0 0 / 0.8), rgb(0 0 0 / 0.3))'
       }}
     />
   )

@@ -34,18 +34,18 @@ function MiniPlayer() {
     <div className="h-full w-full" style={style}>
       <div className={`${card} drag relative flex h-full w-full items-center gap-3 overflow-hidden ${t.pad} pr-3`}>
         <CardBackdrop look={o} coverId={track?.coverArt} bars={32} />
-        <div className="relative shrink-0" style={{ width: l.cover, height: l.cover }}>
+        <div className="relative shrink-0 rounded-md shadow-[0_2px_8px_rgb(0_0_0/0.35)]" style={{ width: l.cover, height: l.cover }}>
           <Cover id={track?.coverArt} size={o.size === 'large' ? 300 : 200} className="h-full w-full" />
         </div>
         <div className="relative flex min-w-0 flex-1 flex-col justify-between self-stretch">
-          <div className="min-w-0 pr-12">
+          <div className="text-shadow min-w-0 pr-12">
             <div className={`truncate font-semibold leading-tight ${t.title}`}>{track?.title ?? 'Nothing playing'}</div>
             <div className={`truncate text-ink-2 ${t.artist}`}>{track?.artist ?? 'Pick something in Lyria'}</div>
             {t.album && track?.album && <div className="truncate text-[12px] text-ink-3">{track.album}</div>}
           </div>
           <div className="flex items-center justify-between gap-2">
             <TransportControls compact={o.size !== 'large'} size={t.controls} shuffle={o.shuffle} like={o.like} />
-            <Elapsed className={t.time} />
+            <Elapsed className={`text-shadow ${t.time}`} />
           </div>
           {t.seek && <SeekBar className="w-full" />}
         </div>

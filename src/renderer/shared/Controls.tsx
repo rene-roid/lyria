@@ -130,13 +130,16 @@ export function SeekBar({ className = '' }: { className?: string }) {
   )
 }
 
-/** The same progress as a hairline along the bottom edge of a card, for layouts with no room for a bar. */
-export function ProgressLine() {
+/**
+ * The same progress as a hairline along the bottom edge of a card, for layouts with no room for a
+ * bar. `inset` keeps it to the straight part of an edge whose ends curve away.
+ */
+export function ProgressLine({ inset = 0 }: { inset?: number }) {
   const position = usePlayerState((s) => s.position)
   const duration = usePlayerState((s) => s.duration)
   const pct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-white/10">
+    <div className="pointer-events-none absolute bottom-0 h-[2px] bg-white/10" style={{ left: inset, right: inset }}>
       <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${pct}%` }} />
     </div>
   )
