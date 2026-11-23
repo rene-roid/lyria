@@ -185,6 +185,11 @@ export function createMainWindow(): BrowserWindow {
   forwardConsole('main', win)
   rememberBounds('main', win)
   win.on('ready-to-show', () => win.show())
+  const shown = (v: boolean) => (): void => win.webContents.send('window:shown', v)
+  win.on('minimize', shown(false))
+  win.on('hide', shown(false))
+  win.on('restore', shown(true))
+  win.on('show', shown(true))
   win.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
     return { action: 'deny' }

@@ -28,6 +28,8 @@ const windowName = ((): WindowName => {
 
 type Unsubscribe = () => void
 
+let frameWanters = 0
+
 function subscribe<T>(channel: string, cb: (payload: T) => void): Unsubscribe {
   const handler = (_e: IpcRendererEvent, payload: T): void => cb(payload)
   ipcRenderer.on(channel, handler)
@@ -49,8 +51,10 @@ const api = {
     getState(): Promise<PlayerState> {
       return ipcRenderer.invoke('player:getState')
     },
+    /** Several parts of one window may each want frames; the window's stream ends with the last of them. */
     wantFrames(wanted: boolean): void {
-      ipcRenderer.send('player:wantFrames', wanted)
+      frameWanters = Math.max(0, frameWanters + (wanted ? 1 : -1))
+      if (frameWanters === (wanted ? 1 : 0)) ipcRenderer.send('player:wantFrames', wanted)
     }
   },
 
@@ -227,7 +231,14 @@ const api = {
     close: (): void => ipcRenderer.send('window:control', 'close'),
     hide: (): void => ipcRenderer.send('window:control', 'hide'),
     showMain: (): void => ipcRenderer.send('window:control', 'showMain'),
-    setIgnoreMouse: (ignore: boolean): void => ipcRenderer.send('window:setIgnoreMouse', ignore)
+    setIgnoreMouse: (ignore: boolean): void => ipcRenderer.send('window:setIgnoreMouse', ignore),
+    /**
+     * Main window only: minimised or hidden to the tray, and back. Background throttling is off in
+     * every window, so the page's own visibility state never changes.
+     */
+    onShown(cb: (shown: boolean) => void): Unsubscribe {
+      return subscribe('window:shown', cb)
+    }
   },
 
   /** The taskbar widget's drag: the page follows the pointer, main moves the window and snaps it. */
