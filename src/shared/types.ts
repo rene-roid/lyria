@@ -82,6 +82,11 @@ export const initialPlayerState: PlayerState = {
   shuffle: false
 }
 
+/** `track` with the like a `starChanged` event reports, when it is the song that changed. */
+export function starredCopy<T extends Track | null>(track: T, id: string, starred: boolean): T {
+  return track?.id === id ? { ...track, starred } : track
+}
+
 /** Events emitted by the audio host and relayed by main to every window. */
 export interface PlayerEvents {
   hostReady: { ready: boolean }
@@ -91,6 +96,8 @@ export interface PlayerEvents {
   queueChanged: { queue: Track[]; index: number }
   volumeChanged: { volume: number; muted: boolean }
   modeChanged: { repeat: RepeatMode; shuffle: boolean }
+  /** A song in the queue was liked or unliked, from any window. */
+  starChanged: { id: string; starred: boolean }
   /** ~30fps frequency bins (0..255) and an overall level (0..1). */
   audioFrame: { bins: Uint8Array; level: number }
   error: { message: string }
@@ -115,6 +122,8 @@ export interface PlayerCommands {
   clearQueue: undefined
   setRepeat: { repeat: RepeatMode }
   setShuffle: { shuffle: boolean }
+  /** The server has taken a like; the host keeps its queue's copy in step and tells every window. */
+  setStarred: { id: string; starred: boolean }
 }
 export type PlayerCommandName = keyof PlayerCommands
 

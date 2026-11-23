@@ -1,11 +1,10 @@
-import { Heart, ListMusic, MicVocal, PictureInPicture2, Repeat, Repeat1, Shuffle, Volume1, Volume2, VolumeX } from 'lucide-react'
+import { ListMusic, MicVocal, PictureInPicture2, Repeat, Repeat1, Shuffle, Volume1, Volume2, VolumeX } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { Track } from '@shared/types'
 import { formatTime, wheelVolumeStep } from '@shared/format'
 import { Cover } from '@renderer/shared/Cover'
-import { TransportControls } from '@renderer/shared/Controls'
+import { LikeButton, TransportControls, useStar } from '@renderer/shared/Controls'
 import { player, usePlayerState } from '@renderer/shared/playerStore'
-import { useClient, useSettings } from '@renderer/shared/sessionStore'
+import { useSettings } from '@renderer/shared/sessionStore'
 import { nav, useNav } from './nav'
 import { useContextMenu } from './components/ContextMenu'
 import { TrackMenu } from './components/TrackList'
@@ -68,7 +67,7 @@ export function NowPlayingBar() {
                 <ArtistLinks track={track} className="hover:text-ink" />
               </div>
             </div>
-            <FavoriteButton {...star} />
+            <LikeButton star={star} />
           </>
         )}
       </div>
@@ -166,50 +165,6 @@ function Toggle({
       disabled={disabled}
     >
       {children}
-    </button>
-  )
-}
-
-/** Star/unstar the current track on the server. Optimistic, reverts if the call fails. */
-function useStar(track: Track | null): { starred: boolean; toggle: () => Promise<void>; disabled: boolean } {
-  const client = useClient()
-  const [starred, setStarred] = useState(false)
-
-  useEffect(() => setStarred(Boolean(track?.starred)), [track?.id, track?.starred])
-
-  return {
-    starred,
-    disabled: !track || !client,
-    toggle: async () => {
-      if (!track || !client) return
-      const next = !starred
-      setStarred(next)
-      try {
-        await (next ? client.star(track.id) : client.unstar(track.id))
-      } catch {
-        setStarred(!next)
-      }
-    }
-  }
-}
-
-function FavoriteButton({
-  starred,
-  toggle,
-  disabled
-}: {
-  starred: boolean
-  toggle: () => Promise<void>
-  disabled: boolean
-}) {
-  return (
-    <button
-      className={`icon-btn h-8 w-8 shrink-0 rounded-full ${starred ? 'text-accent hover:text-accent' : ''}`}
-      disabled={disabled}
-      title={starred ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
-      onClick={() => void toggle()}
-    >
-      <Heart size={16} fill={starred ? 'currentColor' : 'none'} />
     </button>
   )
 }

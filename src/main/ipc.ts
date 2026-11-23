@@ -1,6 +1,7 @@
 import { app, ipcMain, shell, type IpcMainEvent } from 'electron'
 import {
   initialPlayerState,
+  starredCopy,
   type PlayerCommandName,
   type PlayerCommands,
   type PlayerEventName,
@@ -96,6 +97,12 @@ function applyEvent<K extends PlayerEventName>(event: K, payload: PlayerEvents[K
       playerState.repeat = p.repeat
       playerState.shuffle = p.shuffle
       updateSettings({ repeat: p.repeat, shuffle: p.shuffle })
+      break
+    }
+    case 'starChanged': {
+      const { id, starred } = payload as PlayerEvents['starChanged']
+      playerState.track = starredCopy(playerState.track, id, starred)
+      playerState.queue = playerState.queue.map((t) => starredCopy(t, id, starred))
       break
     }
   }
