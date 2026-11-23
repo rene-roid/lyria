@@ -89,6 +89,7 @@ function applyEvent<K extends PlayerEventName>(event: K, payload: PlayerEvents[K
       const p = payload as PlayerEvents['queueChanged']
       playerState.queue = p.queue
       playerState.index = p.index
+      playerState.autoplayFrom = p.autoplayFrom
       break
     }
     case 'volumeChanged': {

@@ -31,7 +31,7 @@ export function initPlayerBridge(): void {
   )
   player.on('playStateChanged', ({ playing }) => set({ playing }))
   player.on('positionUpdate', ({ position, duration }) => set({ position, duration }))
-  player.on('queueChanged', ({ queue, index }) => set({ queue, index }))
+  player.on('queueChanged', ({ queue, index, autoplayFrom }) => set({ queue, index, autoplayFrom }))
   player.on('volumeChanged', ({ volume, muted }) => set({ volume, muted }))
   player.on('modeChanged', ({ repeat, shuffle }) => set({ repeat, shuffle }))
   player.on('starChanged', ({ id, starred }) =>
@@ -61,6 +61,7 @@ export const player = {
   setVolume: (volume: number) => send('setVolume', { volume }),
   setMuted: (muted: boolean) => send('setMuted', { muted }),
   setQueue: (tracks: Track[], index = 0, autoplay = true) => send('setQueue', { tracks, index, autoplay }),
+  playRadio: (track: Track) => send('playRadio', { track }),
   addToQueue: (tracks: Track[], next = false) => send('addToQueue', { tracks, next }),
   playAt: (index: number) => send('playAt', { index }),
   removeFromQueue: (index: number) => send('removeFromQueue', { index }),

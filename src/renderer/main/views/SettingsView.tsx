@@ -1300,6 +1300,12 @@ export function SettingsView() {
       <section className="mb-8">
         <SectionHeader title="Playback" />
         <NormalizeSetting value={settings.normalize} onChange={(normalize) => update({ normalize })} />
+        <Toggle
+          label="Autoplay similar songs when your queue ends"
+          description="Songs like the last few you played, from your server's recommendations or the same genres. A song played on its own carries on this way straight away"
+          checked={settings.autoplay}
+          onChange={(v) => update({ autoplay: v })}
+        />
       </section>
 
       <section className="mb-8">
