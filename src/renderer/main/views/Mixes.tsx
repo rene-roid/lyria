@@ -1,7 +1,6 @@
 import { BookmarkCheck, BookmarkPlus, Trash2 } from 'lucide-react'
 import { downloadKey, type MixKind, type SavedMix } from '@shared/types'
-import { MIX_SECTIONS, paletteColor, partitionHidden } from '@shared/navimix'
-import { capitalize } from '@shared/format'
+import { MIX_SECTIONS, partitionHidden } from '@shared/navimix'
 import { useClient } from '@renderer/shared/sessionStore'
 import { Card, CardGrid, PlaylistCard, Shelf } from '../components/AlbumCard'
 import { TagArt, TagArtCover } from '../components/TagArt'
@@ -9,7 +8,7 @@ import { TrackPage } from '../components/TrackPage'
 import { DownloadButton } from '../components/DownloadButton'
 import { downloads, useDownload } from '../downloads'
 import { Empty, GhostButton, PageTitle, SectionHeader } from '../components/ui'
-import { buildMix, mixKey, mixSeeds, type MixSeed } from '../mixes'
+import { buildMix, discoverySeeds, MIXES, mixColor, mixKey, mixSeeds, mixTitle, type MixSeed } from '../mixes'
 import { allAlbums } from '../albumList'
 import { nav } from '../nav'
 import { cachedOr } from '../offline'
@@ -18,9 +17,7 @@ import { findSavedMix, savedMixId, savedMixRecent, savedMixes, useSavedMixes } f
 import { useAsync } from '../useAsync'
 import { useHiddenPlaylists, useServerPlaylists } from '../playlists'
 
-/** Tag text arrives lowercased from most taggers; an artist's name is already cased how they want it. */
-const mixTitle = (s: MixSeed): string => `${s.kind === 'artist' ? s.value : capitalize(s.value)} Mix`
-const mixLabel = (s: MixSeed): string => `${capitalize(s.kind)} mix`
+const mixLabel = (s: MixSeed): string => MIXES[s.kind].label
 const mixRecent = (s: MixSeed) => recentOf({ name: 'mix', kind: s.kind, value: s.value }, mixTitle(s), mixLabel(s))
 
 const savedOn = (at: number): string => new Date(at).toLocaleDateString(undefined, { dateStyle: 'medium' })
@@ -32,7 +29,7 @@ function MixCard({ seed }: { seed: MixSeed }) {
     <Card
       art={<TagArt art={{ style: 'mix', seed }} name={title} />}
       title={title}
-      subtitle={mixLabel(seed)}
+      subtitle={MIXES[seed.kind].about ?? mixLabel(seed)}
       onOpen={() => nav.go({ name: 'mix', kind: seed.kind, value: seed.value })}
       from={mixRecent(seed).key}
       onPlay={async () => {
@@ -43,20 +40,27 @@ function MixCard({ seed }: { seed: MixSeed }) {
   )
 }
 
-/** Lyria's own mixes are built here, on this machine, and never written to the server as playlists. */
-const LOCAL_TITLE = 'Mixed by Lyria'
+/**
+ * Lyria's own rows of mixes, built here, on this machine, and never written to the server as
+ * playlists: the ones seeded from your tags and artists, and the ones out to find you something new.
+ */
+const ROWS = {
+  // :2 because the cache is on disk and older builds stored bare genre strings under 'mixes'.
+  tags: { title: 'Mixed by Lyria', key: 'mixes:2', seeds: mixSeeds },
+  discover: { title: 'Discover', key: 'mixes:discover', seeds: discoverySeeds }
+}
 
 /** The day's mixes: one shelf on Home, the full grid on the Mixes page. Nothing until there is play history to seed from. */
-export function MixRow({ shelf = false }: { shelf?: boolean }) {
+export function MixRow({ row, shelf = false }: { row: keyof typeof ROWS; shelf?: boolean }) {
   const client = useClient()
-  // :2 because the cache is on disk and older builds stored bare genre strings under 'mixes'.
-  const state = useAsync('mixes:2', () => (client ? mixSeeds(client) : undefined), [client])
+  const { title, key, seeds } = ROWS[row]
+  const state = useAsync(key, () => (client ? seeds(client) : undefined), [client, row])
   if (!state.data?.length) return null
   const cards = state.data.map((seed) => <MixCard key={`${seed.kind}:${seed.value}`} seed={seed} />)
-  if (shelf) return <Shelf title={LOCAL_TITLE} onMore={() => nav.go({ name: 'mixes' })} items={cards} />
+  if (shelf) return <Shelf title={title} onMore={() => nav.go({ name: 'mixes' })} items={cards} />
   return (
     <section className="mb-8">
-      <SectionHeader title={LOCAL_TITLE} />
+      <SectionHeader title={title} />
       <CardGrid>{cards}</CardGrid>
     </section>
   )
@@ -106,6 +110,7 @@ export function MixesView() {
         title="Mixes"
         subtitle="Your server's NaviBeat and Explo mixes, the ones Lyria builds from what you play, and the ones you kept."
       />
+      <MixRow row="discover" />
       {MIX_SECTIONS.map(({ key, title }) => {
         const items = mixes.filter((m) => m.mix.section === key)
         return (
@@ -117,7 +122,7 @@ export function MixesView() {
           )
         )
       })}
-      <MixRow />
+      <MixRow row="tags" />
       <SavedMixRow mixes={saved} />
       {hidden.length > 0 && (
         <section className="mb-8">
@@ -146,7 +151,7 @@ export function MixView({ value, kind = 'genre' }: { value: string; kind?: MixKi
       title={title}
       state={state}
       origin={mixRecent(seed)}
-      color={paletteColor(seed.value)}
+      color={mixColor(seed)}
       cover={<TagArtCover art={{ style: 'mix', seed }} name={title} />}
       actions={
         <GhostButton
@@ -182,7 +187,7 @@ export function SavedMixView({ id }: { id: string }) {
       title={mix.title}
       state={{ data: mix.tracks, error: undefined, loading: false, reload: () => {} }}
       origin={savedMixRecent(mix)}
-      color={paletteColor(mix.seed.value)}
+      color={mixColor(mix.seed)}
       cover={<TagArtCover art={{ style: 'mix', seed: mix.seed }} name={mix.title} fallback={mix.tracks[0]?.coverArt} />}
       actions={
         <GhostButton

@@ -232,6 +232,7 @@ function OnlineHome() {
       </div>
       <RecentGrid mixes={mixes} />
       <MixShelf mixes={mixes} section="madeForYou" title={username ? `Made For ${capitalize(username)}` : undefined} />
+      <MixRow row="discover" shelf />
       <AlbumRow title="Recently played" type="recent" />
       <MixShelf mixes={mixes} section="topMixes" />
       <MixShelf mixes={mixes} section="timeOfDay" />
@@ -245,7 +246,7 @@ function OnlineHome() {
         <Shelf title="Your radios" items={savedFirst(radios, saved).map((p) => <PlaylistCard key={p.id} playlist={p} />)} />
       )}
       <MixShelf mixes={mixes} section="favorites" />
-      <MixRow shelf />
+      <MixRow row="tags" shelf />
       <AlbumRow title="Recently added" type="newest" />
       <AlbumRow title="Most played" type="frequent" />
       <AlbumRow title="Random picks" type="random" />
