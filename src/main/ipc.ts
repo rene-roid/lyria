@@ -19,11 +19,13 @@ import {
   probeServers,
   type ServerProbe
 } from '@shared/subsonic/client'
+import type { PlayedTrack } from '@shared/playHistory'
 import * as artCache from './artCache'
 import * as audioCache from './audioCache'
 import * as connection from './connection'
 import * as downloads from './downloads'
 import * as metaCache from './metaCache'
+import * as playHistory from './playHistory'
 import * as scrobbles from './scrobbles'
 import { setAutoLaunch } from './autolaunch'
 import { clearSession, loadSession, saveSession } from './credentials'
@@ -276,8 +278,11 @@ export function setupIpc(): void {
     const [own, cached] = await Promise.all([downloads.available(ids), audioCache.available(ids)])
     return ids.filter((id) => own.has(id) || cached.has(id))
   })
-  ipcMain.on('cache:played', (e, id: string, time: number) => {
-    if (windowNameOf(e.sender.id) === 'host' && typeof id === 'string') scrobbles.submit(id, Number(time) || Date.now())
+  ipcMain.on('cache:played', (e, track: PlayedTrack, time: number) => {
+    if (windowNameOf(e.sender.id) !== 'host' || typeof track?.id !== 'string') return
+    const at = Number(time) || Date.now()
+    playHistory.recordPlay(track, at)
+    scrobbles.submit(track.id, at)
   })
   ipcMain.handle('cache:stats', () => audioCache.stats())
   ipcMain.handle('cache:clear', () => audioCache.clear())
@@ -289,6 +294,9 @@ export function setupIpc(): void {
   ipcMain.handle('downloads:remove', (_e, key: string) => downloads.remove(key))
   ipcMain.handle('downloads:stats', () => downloads.stats())
   downloads.onChange((list) => broadcast('downloads:changed', [list]))
+
+  // ---- play history ----------------------------------------------------------
+  ipcMain.handle('history:get', () => playHistory.all())
 
   // ---- connection ------------------------------------------------------------
   ipcMain.handle('connection:get', () => connection.status())

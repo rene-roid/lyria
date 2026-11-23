@@ -51,7 +51,7 @@ host.onFramesWanted((wanted) => engine.setFramesWanted(wanted))
 
 engine.fetchCached = (id, url) => cache.want(id, url)
 engine.findLocal = (id) => cache.local(id)
-engine.reportPlay = (id, time) => cache.played(id, time)
+engine.reportPlay = (track, time) => cache.played(track, time)
 engine.available = (ids) => cache.available(ids)
 engine.checkOnline = () => connection.check()
 connection.onChange((online) => {

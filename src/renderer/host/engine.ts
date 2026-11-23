@@ -101,7 +101,7 @@ export class AudioEngine {
    * Tells the server a play counted. Main queues it while the server is unreachable, so plays of
    * downloaded songs offline still reach the play counts. Without it the client is called directly.
    */
-  reportPlay?: (id: string, time: number) => void
+  reportPlay?: (track: Track, time: number) => void
 
   /** Which of `ids` have a downloaded or cached copy. Undefined: every song is taken to stream. */
   available?: (ids: string[]) => Promise<string[]>
@@ -541,7 +541,7 @@ export class AudioEngine {
     const track = this.current
     if (!track || !this.client) return
     this.scrobbleSubmitted = true
-    if (this.reportPlay) this.reportPlay(track.id, Date.now())
+    if (this.reportPlay) this.reportPlay(track, Date.now())
     else void this.client.scrobble(track.id, true).catch(() => undefined)
   }
 

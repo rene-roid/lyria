@@ -19,6 +19,7 @@ import type {
   WindowName
 } from '@shared/types'
 import type { ServerProbe } from '@shared/subsonic/client'
+import type { PlayedTrack, PlayHistory } from '@shared/playHistory'
 
 const windowName = ((): WindowName => {
   const arg = process.argv.find((a) => a.startsWith('--lyria-window='))
@@ -132,9 +133,9 @@ const api = {
     available(ids: string[]): Promise<string[]> {
       return ipcRenderer.invoke('cache:available', ids)
     },
-    /** A play that counts, for the server's play counts; main holds it while the server is away. */
-    played(id: string, time: number): void {
-      ipcRenderer.send('cache:played', id, time)
+    /** A play that counts, for the server's play counts and this device's; main holds it while the server is away. */
+    played(track: PlayedTrack, time: number): void {
+      ipcRenderer.send('cache:played', track, time)
     },
     stats(): Promise<{ bytes: number; count: number }> {
       return ipcRenderer.invoke('cache:stats')
@@ -179,6 +180,13 @@ const api = {
     },
     onChange(cb: (online: boolean) => void): Unsubscribe {
       return subscribe('connection:changed', cb)
+    }
+  },
+
+  /** What this device has played, beside the server's own counts. See shared/playHistory. */
+  history: {
+    get(): Promise<PlayHistory> {
+      return ipcRenderer.invoke('history:get')
     }
   },
 
