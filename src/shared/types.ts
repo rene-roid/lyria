@@ -237,14 +237,16 @@ export function viewKey(v: View): string {
  * started a play from, or the song itself when it was played on its own.
  */
 export interface RecentItem {
-  /** `viewKey(view)`, or `track:<id>` for a lone song. */
+  /** `viewKey(view)`, `track:<id>` for a lone song, or `radio:<id>` for a song radio. */
   key: string
   title: string
   subtitle?: string
   coverArt?: string
-  /** The place played from. Absent for a lone song, which `track` holds instead. */
+  /** The place played from. Absent for a lone song or a song radio, which `track` holds instead. */
   view?: View
   track?: Track
+  /** `track` started a song radio, so playing the tile starts the radio again, not the song alone. */
+  radio?: true
 }
 
 const RECENTS_LIMIT = 7

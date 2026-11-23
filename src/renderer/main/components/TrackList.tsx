@@ -10,6 +10,7 @@ import {
   Mic2,
   Play,
   Plus,
+  Radio,
   Trash2,
   Volume2
 } from 'lucide-react'
@@ -21,7 +22,7 @@ import { player, usePlayerState } from '@renderer/shared/playerStore'
 import { useClient } from '@renderer/shared/sessionStore'
 import { nav } from '../nav'
 import { useOffline, useOnDevice } from '../offline'
-import { playFrom } from '../recents'
+import { playFrom, playRadio } from '../recents'
 import { playlists, usePlaylistsRevision } from '../playlists'
 import { useAsync } from '../useAsync'
 import { clickAction, noSelection, rowKeys, select, selectedIndexes, type SelectAction } from '../selection'
@@ -107,8 +108,12 @@ export function TrackList({
     [client]
   )
 
-  // Handed to every row, so they have to hold still while the list re-renders around them.
-  const onPlay = useCallback((index: number) => playFrom(tracks, index, origin, from), [tracks, origin, from])
+  // Handed to every row, so they have to hold still while the list re-renders around them. Rows
+  // from nowhere in particular, like search hits, play on their own and autoplay carries on from them.
+  const onPlay = useCallback(
+    (index: number) => (origin === undefined ? playFrom([tracks[index]]) : playFrom(tracks, index, origin, from)),
+    [tracks, origin, from]
+  )
   const onMenu = useCallback(
     (e: React.MouseEvent, index: number) => {
       // As in Spotify, right-clicking a row outside the selection makes that row the selection.
@@ -222,7 +227,7 @@ export function TrackList({
           starred={isStarred(tracks[menuIndex])}
           unavailable={local !== null && !local.has(tracks[menuIndex].id)}
           onClose={menu.close}
-          onPlay={() => playFrom(tracks, menuIndex, origin, from)}
+          onPlay={() => onPlay(menuIndex)}
           onToggleStar={() => void toggleStar(tracks[menuIndex])}
           onRemove={onRemove && (() => onRemove([menuIndex]))}
           removeLabel={removeLabel}
@@ -417,6 +422,9 @@ export function TrackMenu({
           </MenuItem>
           <MenuItem icon={<ListPlus size={14} />} onClick={run(() => player.addToQueue([track]))} disabled={unavailable}>
             Add to queue
+          </MenuItem>
+          <MenuItem icon={<Radio size={14} />} onClick={run(() => playRadio(track))} disabled={unavailable || !client || offline}>
+            Start song radio
           </MenuItem>
           <MenuSeparator />
           <MenuItem icon={<Plus size={14} />} onClick={() => setPick('playlist')} disabled={!client || offline} hint="›">

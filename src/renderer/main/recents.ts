@@ -52,6 +52,21 @@ export function playFrom(tracks: Track[], index = 0, origin?: RecentItem | null,
   remember(origin === undefined ? songItem(tracks[index]) : origin)
 }
 
+/** Play `track` followed by songs like it, and put its radio on Home's shelf. */
+export function playRadio(track: Track): void {
+  const item: RecentItem = {
+    key: `radio:${track.id}`,
+    title: `${track.title} Radio`,
+    subtitle: track.artist,
+    coverArt: track.coverArt,
+    track,
+    radio: true
+  }
+  player.playRadio(track)
+  usePlayingFrom.setState({ key: item.key })
+  remember(item)
+}
+
 /** Whether the queue came from `key`, and whether it is playing right now. */
 export function usePlayingState(key: string | undefined): { current: boolean; playing: boolean } {
   const current = usePlayingFrom((s) => key !== undefined && s.key === key)
