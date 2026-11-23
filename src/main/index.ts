@@ -173,16 +173,16 @@ let lastResume = ''
  */
 function resumeKey(r: ReturnType<typeof sanitizeResume>): string {
   if (!r) return ''
-  const { queue, index, position } = r
-  return `${queue.length}|${queue[0]?.id ?? ''}|${queue[queue.length - 1]?.id ?? ''}|${index}|${Math.round(position)}`
+  const { queue, index, position, autoplayFrom } = r
+  return `${queue.length}|${queue[0]?.id ?? ''}|${queue[queue.length - 1]?.id ?? ''}|${index}|${Math.round(position)}|${autoplayFrom}`
 }
 
 /** Snapshot the resume point, skipping the write when nothing moved since the last one. */
 function saveResume(): void {
   // Before the host finishes restoring, the queue is still empty and a write would erase the saved one.
   if (!playerState.hostReady) return
-  const { queue, index, position } = playerState
-  const resume = sanitizeResume({ queue, index, position })
+  const { queue, index, position, autoplayFrom } = playerState
+  const resume = sanitizeResume({ queue, index, position, autoplayFrom })
   const key = resumeKey(resume)
   if (key === lastResume) return
   lastResume = key

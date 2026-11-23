@@ -106,6 +106,11 @@ const songs = [
     freq: s.freq
   }
 })
+/**
+ * What the server's agent would call similar. Only Aurora Fields has an entry, so the other
+ * artists answer with nothing, as Navidrome does without Last.fm, and radios fall back on genres.
+ */
+const similarArtists: Record<string, string[]> = { 'Aurora Fields': ['Blue Static', 'Mira Kato'] }
 const playlists = [
   { id: 'pl1', name: 'Focus', owner: 'admin', public: true, songCount: 3, duration: 36, created: '2024-06-01T00:00:00Z', entry: ['s1', 's4', 's6'] },
   { id: 'pl2', name: 'Late Night Radio', owner: 'admin', public: true, songCount: 2, duration: 24, created: '2024-06-02T00:00:00Z', entry: ['s2', 's5'] },
@@ -288,6 +293,20 @@ Bun.serve({
         }
         case 'getRandomSongs':
           return ok({ randomSongs: { song: [...songs].sort(() => Math.random() - 0.5).slice(0, Number(q.get('size') ?? 10)).map(strip) } })
+        case 'getSimilarSongs2': {
+          // Navidrome takes a song or an artist here.
+          const id = q.get('id') ?? ''
+          const of = song(id)?.artist ?? artists.find((a) => a.id === id)?.name
+          if (!of) return fail(70, 'Song not found')
+          const like = similarArtists[of] ?? []
+          const count = Number(q.get('count') ?? 50)
+          return ok({ similarSongs2: { song: songs.filter((x) => like.includes(x.artist)).slice(0, count).map(strip) } })
+        }
+        case 'getTopSongs': {
+          const artist = q.get('artist') ?? ''
+          const top = artist in similarArtists ? songs.filter((x) => x.artist === artist) : []
+          return ok({ topSongs: { song: top.slice(0, Number(q.get('count') ?? 50)).map(strip) } })
+        }
         case 'getGenres': {
           const counts = new Map<string, number>()
           for (const s of songs) if (s.genre) counts.set(s.genre, (counts.get(s.genre) ?? 0) + 1)

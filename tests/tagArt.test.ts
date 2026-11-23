@@ -14,7 +14,7 @@ const store = new Map<string, string>()
 }
 
 const { candidates, shownCover } = await import('../src/renderer/main/tagArt')
-const { shuffle } = await import('../src/renderer/main/mixes')
+const { shuffle } = await import('../src/shared/shuffle')
 
 /** 300 albums, all tagged "chill", named so that alphabetical order is also index order. */
 const ALBUMS = Array.from({ length: 300 }, (_, i) => ({

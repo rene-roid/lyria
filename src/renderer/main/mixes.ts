@@ -15,6 +15,7 @@ import { mapLimit } from '@shared/async'
 import { capitalize, hasMood } from '@shared/format'
 import { paletteColor } from '@shared/navimix'
 import { localAlbums, mergeTaste, withLocalPlays, type PlayHistory } from '@shared/playHistory'
+import { interleave, sameArtist, shuffle, spread, tally } from '@shared/shuffle'
 import { cacheRead, cacheWrite } from '@renderer/shared/cache'
 import { allAlbums } from './albumList'
 
@@ -91,73 +92,10 @@ const FRESH_ALBUMS = 12
 const NOT_AN_ARTIST = /^(various(\s+artists)?|va|unknown artist|soundtrack|\[?unknown\]?)$/i
 const isArtist = (name: string | undefined): name is string => !!name && !NOT_AN_ARTIST.test(name.trim())
 
-export function seedOf(s: string): number {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
-  return h >>> 0
-}
-
-/**
- * Deterministic shuffle: a mix stays put all day and comes back different tomorrow, with nothing
- * stored. Also what picks the covers a tag wears, so those hold still for their own period too.
- */
-export function shuffle<T>(items: T[], seed: string): T[] {
-  let s = seedOf(seed)
-  const out = [...items]
-  for (let i = out.length - 1; i > 0; i--) {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0
-    const j = s % (i + 1)
-    ;[out[i], out[j]] = [out[j], out[i]]
-  }
-  return out
-}
-
 const today = (): string => new Date().toDateString()
 
 /** The seed string behind a mix: same mix all day, a different one tomorrow. */
 const daySeed = (seed: MixSeed): string => `${seed.kind}:${seed.value}:${today()}`
-
-/** Drop repeats and cap how much of the list any one artist may take, up to `limit` songs. */
-function spread(tracks: Track[], limit = MIX_LENGTH, perArtist = PER_ARTIST): Track[] {
-  const seen = new Map<string, number>()
-  const ids = new Set<string>()
-  const out: Track[] = []
-  for (const t of tracks) {
-    if (ids.has(t.id)) continue
-    const n = seen.get(t.artist) ?? 0
-    if (n >= perArtist) continue
-    seen.set(t.artist, n + 1)
-    ids.add(t.id)
-    out.push(t)
-    if (out.length === limit) break
-  }
-  return out
-}
-
-/**
- * Deal `lead` evenly through `rest` rather than stacking it up front, so an artist mix opens with
- * its artist and keeps coming back to them instead of drifting away after the first few songs.
- */
-function interleave(lead: Track[], rest: Track[], limit = MIX_LENGTH): Track[] {
-  if (!lead.length || !rest.length) return [...lead, ...rest].slice(0, limit)
-  const step = Math.max(2, Math.floor(limit / lead.length))
-  const out: Track[] = []
-  let l = 0
-  let r = 0
-  while (out.length < limit && (l < lead.length || r < rest.length)) {
-    if (l < lead.length && out.length % step === 0) out.push(lead[l++])
-    else if (r < rest.length) out.push(rest[r++])
-    else out.push(lead[l++])
-  }
-  return out
-}
-
-/** Values by how often they show up, most common first. */
-function tally(values: (string | undefined)[]): string[] {
-  const counts = new Map<string, number>()
-  for (const v of values) if (v) counts.set(v, (counts.get(v) ?? 0) + 1)
-  return [...counts].sort((a, b) => b[1] - a[1]).map(([value]) => value)
-}
 
 /** How much of your listening each value takes, by the play counts of the albums carrying it, most first. */
 function plays(albums: AlbumID3[], pick: (a: AlbumID3) => string | undefined): Map<string, number> {
@@ -168,8 +106,6 @@ function plays(albums: AlbumID3[], pick: (a: AlbumID3) => string | undefined): M
   }
   return new Map([...counts].sort((a, b) => b[1] - a[1]))
 }
-
-const sameArtist = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
 /**
  * Work done once per client and day: a build, or the taste every discovery mix reads. The Discover
@@ -265,8 +201,8 @@ async function artistMix(client: SubsonicClient, name: string, seed: string): Pr
 
   const lead = spread(shuffle(own, seed), PER_SEED_ARTIST, PER_SEED_ARTIST)
   if (!neighbours.length) return spread(shuffle(own, seed), MIX_LENGTH, MIX_LENGTH)
-  const rest = spread(shuffle(neighbours, seed), MIX_LENGTH - lead.length)
-  return interleave(lead, rest)
+  const rest = spread(shuffle(neighbours, seed), MIX_LENGTH - lead.length, PER_ARTIST)
+  return interleave(lead, rest, MIX_LENGTH)
 }
 
 const unplayed = (t: Track): boolean => !t.playCount
@@ -282,7 +218,7 @@ async function discover(client: SubsonicClient, day: string, sources: MixSources
   const isKnown = (t: Track): boolean => known.has(t.artist.toLowerCase())
   const strangers = shuffle(pool.filter((t) => !isKnown(t)), day)
   const familiar = shuffle(pool.filter(isKnown), day)
-  return enough(shuffle(spread([...strangers, ...familiar]), day))
+  return enough(shuffle(spread([...strangers, ...familiar], MIX_LENGTH, PER_ARTIST), day))
 }
 
 /** Songs you passed over by the artists you play most: the album tracks their hits crowd out. */
@@ -353,12 +289,14 @@ export const MIXES: Record<MixKind, MixDef> = {
   genre: {
     title: tagTitle,
     label: 'Genre mix',
-    build: async (client, genre, day) => spread(shuffle(await client.getSongsByGenre(genre, 500), day))
+    build: async (client, genre, day) =>
+      spread(shuffle(await client.getSongsByGenre(genre, 500), day), MIX_LENGTH, PER_ARTIST)
   },
   mood: {
     title: tagTitle,
     label: 'Mood mix',
-    build: async (client, mood, day, sources) => spread(shuffle(await moodPool(client, mood, day, sources.albums), day))
+    build: async (client, mood, day, sources) =>
+      spread(shuffle(await moodPool(client, mood, day, sources.albums), day), MIX_LENGTH, PER_ARTIST)
   },
   artist: {
     title: (name) => `${name} Mix`,

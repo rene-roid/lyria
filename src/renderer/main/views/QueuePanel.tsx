@@ -1,5 +1,5 @@
-import { ListPlus, Trash2, X } from 'lucide-react'
-import { memo, useCallback, useEffect, useRef } from 'react'
+import { ListPlus, Sparkles, Trash2, X } from 'lucide-react'
+import { Fragment, memo, useCallback, useEffect, useRef } from 'react'
 import type { Track } from '@shared/types'
 import { formatTime } from '@shared/format'
 import { Cover } from '@renderer/shared/Cover'
@@ -10,6 +10,7 @@ import { playlists } from '../playlists'
 export function QueuePanel() {
   const queue = usePlayerState((s) => s.queue)
   const index = usePlayerState((s) => s.index)
+  const autoplayFrom = usePlayerState((s) => s.autoplayFrom)
   const listRef = useRef<HTMLDivElement>(null)
   // Stable, so a track change does not hand every row a new callback and re-render the lot.
   const remove = useCallback((i: number) => player.removeFromQueue(i), [])
@@ -39,10 +40,26 @@ export function QueuePanel() {
       <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-2">
         {queue.length === 0 && <div className="py-10 text-center text-xs text-ink-3">Queue is empty</div>}
         {queue.map((t, i) => (
-          <QueueRow key={`${t.id}-${i}`} track={t} index={i} current={i === index} onRemove={remove} />
+          <Fragment key={`${t.id}-${i}`}>
+            {i === autoplayFrom && <AutoplayHeading />}
+            <QueueRow track={t} index={i} current={i === index} onRemove={remove} />
+          </Fragment>
         ))}
       </div>
     </aside>
+  )
+}
+
+/** Above the songs autoplay added, so it is clear they were not picked by hand. */
+function AutoplayHeading() {
+  return (
+    <div className="mt-2 flex items-start gap-2.5 border-t border-stroke px-2 pb-1.5 pt-3">
+      <Sparkles size={14} className="mt-0.5 shrink-0 text-accent" />
+      <div className="min-w-0">
+        <div className="text-[13px] font-bold">Autoplay</div>
+        <div className="text-xs text-ink-2">Similar to what you've been playing</div>
+      </div>
+    </div>
   )
 }
 

@@ -10,10 +10,11 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import type { SubsonicClient } from '@shared/subsonic/client'
 import { isDiscovery, type View } from '@shared/types'
+import { shuffle } from '@shared/shuffle'
 import { cacheRead, cacheWrite, onCacheClear } from '@renderer/shared/cache'
 import { allAlbums } from './albumList'
 import { useClient } from '@renderer/shared/sessionStore'
-import { buildMix, librarySources, shuffle, seedOfView, type MixSeed } from './mixes'
+import { buildMix, librarySources, seedOfView, type MixSeed } from './mixes'
 
 /**
  * Which look draws the background: a genre's or mood's poster, or a mix's colour band. A mix is

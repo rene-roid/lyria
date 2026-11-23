@@ -1,17 +1,19 @@
-import { Shuffle } from 'lucide-react'
+import { Radio, Shuffle } from 'lucide-react'
 import { useMemo } from 'react'
 import { useClient } from '@renderer/shared/sessionStore'
 import { Cover, useCoverColor } from '@renderer/shared/Cover'
 import { AlbumCard, CardGrid } from '../components/AlbumCard'
 import { TrackList } from '../components/TrackList'
 import { ActionIcon, Empty, ErrorBox, Loading, PageTitle, SectionHeader } from '../components/ui'
-import { artistTracks, recentOf, playFrom } from '../recents'
+import { artistRadioRecent, artistRadioTracks, artistTracks, recentOf, playFrom } from '../recents'
+import { useOffline } from '../offline'
 import { useAsync } from '../useAsync'
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export function ArtistView({ id }: { id: string }) {
   const client = useClient()
+  const offline = useOffline()
   const state = useAsync(`artist:${id}`, () => client?.getArtist(id), [client, id])
   const name = state.data?.name
   // Songs credited to the artist anywhere, for the ones off their own albums: guest spots on
@@ -45,6 +47,12 @@ export function ArtistView({ id }: { id: string }) {
     if (songs.length) playFrom(songs, 0, origin)
   }
 
+  const playRadio = async (): Promise<void> => {
+    if (!client) return
+    const songs = await artistRadioTracks(client, artist)
+    if (songs.length) playFrom(songs, 0, artistRadioRecent(artist))
+  }
+
   const songs = elsewhere.length > 0 && (
     <section className="mb-8">
       <SectionHeader title={albums.length ? 'Appears on' : 'Songs'} />
@@ -64,9 +72,14 @@ export function ArtistView({ id }: { id: string }) {
         cover={<Cover id={artist.coverArt ?? artist.id} size={400} className="h-52 w-52" rounded="rounded-full" />}
         play={{ onClick: () => playAll(false), from: origin.key }}
         actions={
-          <ActionIcon title="Shuffle" onClick={() => playAll(true)}>
-            <Shuffle size={28} />
-          </ActionIcon>
+          <>
+            <ActionIcon title="Shuffle" onClick={() => playAll(true)}>
+              <Shuffle size={28} />
+            </ActionIcon>
+            <ActionIcon title={`${artist.name} Radio`} onClick={() => void playRadio()} disabled={!client || offline}>
+              <Radio size={28} />
+            </ActionIcon>
+          </>
         }
       />
       {/* An artist who only guests elsewhere leads with those songs; one with albums leads with the albums. */}

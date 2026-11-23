@@ -14,7 +14,8 @@ import {
   Activity, AudioWaveform, Cloud, CloudMoon, CloudRain, Flame, Guitar, Heart, Hourglass, Moon, Mountain,
   PartyPopper, Smile, Sparkles, Sun, Sunrise, Trophy, Waves, Zap, type LucideIcon
 } from 'lucide-react'
-import { seedOf, type MixSeed } from './mixes'
+import { seedOf } from '@shared/shuffle'
+import type { MixSeed } from './mixes'
 
 /** The colours a cover's shadows, middle tones and highlights are mapped to. */
 export type Palette = readonly [ink: string, mid: string, light: string]

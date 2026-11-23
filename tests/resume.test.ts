@@ -20,4 +20,12 @@ describe('sanitizeResume', () => {
     expect(sanitizeResume({ queue: q(3), index: 9, position: -5 })).toMatchObject({ index: 2, position: 0 })
     expect(sanitizeResume({ queue: q(3), index: -1, position: NaN })).toMatchObject({ index: 0, position: 0 })
   })
+
+  test('keeps where autoplay begins, and a snapshot from before autoplay has none of its songs', () => {
+    expect(sanitizeResume({ queue: q(3), index: 0, position: 0, autoplayFrom: 1 })).toMatchObject({ autoplayFrom: 1 })
+    expect(sanitizeResume({ queue: q(3), index: 0, position: 0 })).toMatchObject({ autoplayFrom: 3 })
+    expect(sanitizeResume({ queue: q(3), index: 0, position: 0, autoplayFrom: 7 })).toMatchObject({ autoplayFrom: 3 })
+    expect(sanitizeResume({ queue: q(3), index: 0, position: 0, autoplayFrom: -2 })).toMatchObject({ autoplayFrom: 0 })
+    expect(sanitizeResume({ queue: q(3), index: 0, position: 0, autoplayFrom: 1.5 })).toMatchObject({ autoplayFrom: 3 })
+  })
 })

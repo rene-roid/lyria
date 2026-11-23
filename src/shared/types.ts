@@ -63,6 +63,8 @@ export interface PlayerState {
   track: Track | null
   index: number
   queue: Track[]
+  /** Index of the first of the songs autoplay added to the end of the queue; the queue's length when there are none. */
+  autoplayFrom: number
   playing: boolean
   position: number
   duration: number
@@ -77,6 +79,7 @@ export const initialPlayerState: PlayerState = {
   track: null,
   index: -1,
   queue: [],
+  autoplayFrom: 0,
   playing: false,
   position: 0,
   duration: 0,
@@ -106,7 +109,7 @@ export interface PlayerEvents {
   trackChanged: { track: Track | null; index: number }
   playStateChanged: { playing: boolean }
   positionUpdate: { position: number; duration: number }
-  queueChanged: { queue: Track[]; index: number }
+  queueChanged: { queue: Track[]; index: number; autoplayFrom: number }
   volumeChanged: { volume: number; muted: boolean }
   modeChanged: { repeat: RepeatMode; shuffle: boolean }
   /** A song in the queue was liked or unliked, from any window. */
@@ -129,6 +132,8 @@ export interface PlayerCommands {
   setVolume: { volume: number }
   setMuted: { muted: boolean }
   setQueue: { tracks: Track[]; index?: number; autoplay?: boolean }
+  /** Play the song on its own, then songs like it once the host has found them. */
+  playRadio: { track: Track }
   addToQueue: { tracks: Track[]; next?: boolean }
   playAt: { index: number }
   removeFromQueue: { index: number }
@@ -155,14 +160,22 @@ export interface ResumeState {
   queue: Track[]
   index: number
   position: number
+  /** Where autoplay's songs at the end of the queue begin, as in `PlayerState`. */
+  autoplayFrom: number
 }
 
-/** Clamp a persisted resume snapshot back into a usable range; null when there is nothing to resume. */
-export function sanitizeResume(r: ResumeState | null | undefined): ResumeState | null {
+/**
+ * Clamp a persisted resume snapshot back into a usable range; null when there is nothing to resume.
+ * Snapshots saved before autoplay have no `autoplayFrom` and come back with no autoplayed songs.
+ */
+export function sanitizeResume(r: Partial<ResumeState> | null | undefined): ResumeState | null {
   if (!r?.queue?.length) return null
-  const index = Math.min(Math.max(Math.trunc(r.index) || 0, 0), r.queue.length - 1)
-  const position = Number.isFinite(r.position) ? Math.max(0, r.position) : 0
-  return { queue: r.queue, index, position }
+  const length = r.queue.length
+  const index = Math.min(Math.max(Math.trunc(r.index ?? 0) || 0, 0), length - 1)
+  const position = Number.isFinite(r.position) ? Math.max(0, r.position ?? 0) : 0
+  const from = r.autoplayFrom ?? length
+  const autoplayFrom = Number.isInteger(from) ? Math.min(Math.max(from, 0), length) : length
+  return { queue: r.queue, index, position, autoplayFrom }
 }
 
 /**
@@ -232,14 +245,25 @@ export function viewKey(v: View): string {
  * started a play from, or the song itself when it was played on its own.
  */
 export interface RecentItem {
-  /** `viewKey(view)`, or `track:<id>` for a lone song. */
+  /**
+   * `viewKey(view)`, `track:<id>` for a lone song, `radio:<id>` for a song radio, or
+   * `artistRadio:<id>` for an artist radio.
+   */
   key: string
   title: string
   subtitle?: string
   coverArt?: string
-  /** The place played from. Absent for a lone song, which `track` holds instead. */
+  /**
+   * The place played from, or the artist page of an artist radio. Absent for a lone song or a song
+   * radio, which `track` holds instead.
+   */
   view?: View
   track?: Track
+  /**
+   * Playing the tile starts a radio again rather than its songs alone: `track`'s, or the artist's
+   * whose page `view` is.
+   */
+  radio?: true
 }
 
 const RECENTS_LIMIT = 7
@@ -565,6 +589,8 @@ export interface Settings {
   mediaKeys: boolean
   /** Level playback across tracks using the server's ReplayGain tags. */
   normalize: NormalizeMode
+  /** Keep playing songs like the last few heard once the queue runs out. */
+  autoplay: boolean
   toastDurationMs: number
   windowBounds: Partial<Record<WindowName, Rect>>
   /** Queue and playback position saved on quit so the next launch picks up where it left off. */
@@ -606,6 +632,7 @@ export const defaultSettings: Settings = {
   autoLaunch: false,
   mediaKeys: true,
   normalize: 'album',
+  autoplay: true,
   toastDurationMs: 3500,
   windowBounds: {},
   resume: null,

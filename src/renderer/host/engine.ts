@@ -10,12 +10,19 @@ import type {
 import { nextPlayable, replayGainFactor, sanitizeResume } from '@shared/types'
 import type { SubsonicClient } from '@shared/subsonic/client'
 import { clamp } from '@shared/format'
+import { radio } from '@shared/radio'
 
 type Emit = <K extends keyof PlayerEvents>(event: K, payload: PlayerEvents[K]) => void
 
 const POSITION_INTERVAL_MS = 250
 const FRAME_INTERVAL_MS = 1000 / 30
 const FRAME_BINS = 48
+/** Songs autoplay adds each time the queue reaches its last song. */
+const AUTOPLAY_COUNT = 20
+/** How many of the songs heard last autoplay finds more like. */
+const AUTOPLAY_SEEDS = 5
+/** Songs a song radio follows its song with. */
+const RADIO_COUNT = 50
 
 /**
  * The single owner of the <audio> element. Runs inside the hidden audio-host window.
@@ -51,6 +58,18 @@ export class AudioEngine {
   private localToken = 0
   /** Whether the server can be reached. Without it, songs with no copy on disk are skipped, not streamed. */
   private online = true
+  /** Top the queue up with songs like the last few heard once its last song is playing. */
+  private autoplay = true
+  /**
+   * Queue entries autoplay put there. Marked by entry rather than position so the mark survives
+   * removals and reorders; the run of them that ends the queue is what the queue panel heads.
+   */
+  private readonly autoplayed = new WeakSet<Track>()
+  /**
+   * The last request for more songs, made after `after` started. Replacing the queue drops it,
+   * which is how an answer that comes back for the old queue knows to go unheard.
+   */
+  private ask: { after: Track; answered: boolean } | null = null
 
   constructor(private readonly emit: Emit) {
     const a = this.audio
@@ -62,6 +81,7 @@ export class AudioEngine {
       void this.ctx?.resume()
       this.emit('playStateChanged', { playing: true })
       this.startTimers()
+      this.maybeAutoplay()
     })
     a.addEventListener('pause', () => {
       this.emit('playStateChanged', { playing: false })
@@ -167,17 +187,24 @@ export class AudioEngine {
     this.applyGain()
   }
 
+  setAutoplay(on: boolean): void {
+    this.autoplay = on
+    this.maybeAutoplay()
+  }
+
   restore(opts: {
     volume: number
     muted: boolean
     repeat: RepeatMode
     shuffle: boolean
     normalize: NormalizeMode
+    autoplay: boolean
     resume?: ResumeState | null
   }): void {
     this.audio.volume = clamp(opts.volume, 0, 1)
     this.audio.muted = opts.muted
     this.normalize = opts.normalize
+    this.autoplay = opts.autoplay
     this.repeat = opts.repeat
     this.shuffle = opts.shuffle
     this.emit('volumeChanged', { volume: this.audio.volume, muted: this.audio.muted })
@@ -189,6 +216,7 @@ export class AudioEngine {
     if (!resume) return
     this.queue = [...resume.queue]
     this.index = resume.index
+    for (const t of this.queue.slice(resume.autoplayFrom)) this.autoplayed.add(t)
     this.emitQueue()
     this.load(this.index, false, resume.position)
   }
@@ -242,27 +270,29 @@ export class AudioEngine {
       }
       case 'setQueue': {
         const { tracks, index = 0, autoplay = true } = payload as PlayerCommands['setQueue']
-        this.unshuffled = null
-        this.queue = [...tracks]
-        if (this.shuffle && this.queue.length > 1) {
-          this.unshuffled = [...this.queue]
-          this.queue = shuffleKeepingFirst(this.queue, index)
-          this.index = 0
-        } else {
-          this.index = clamp(index, 0, Math.max(0, this.queue.length - 1))
-        }
+        this.replaceQueue(tracks, index)
         this.emitQueue()
         if (this.queue.length) this.load(this.index, autoplay)
         else this.stop()
+        break
+      }
+      case 'playRadio': {
+        const { track } = payload as PlayerCommands['playRadio']
+        this.replaceQueue([track], 0)
+        // Asked before the song starts, so autoplay sees a request already out and stays quiet.
+        this.askFor([track], RADIO_COUNT, false)
+        this.emitQueue()
+        this.load(0, true)
         break
       }
       case 'addToQueue': {
         const { tracks, next = false } = payload as PlayerCommands['addToQueue']
         if (!tracks.length) break
         const wasEmpty = this.queue.length === 0
-        if (next && this.index >= 0) this.queue.splice(this.index + 1, 0, ...tracks)
-        else this.queue.push(...tracks)
-        if (this.unshuffled) this.unshuffled.push(...tracks)
+        // What you add goes ahead of the songs autoplay lined up.
+        const at = next ? this.index + 1 : Math.max(this.autoplayFrom(this.queue), this.index + 1)
+        this.queue.splice(at, 0, ...tracks)
+        this.unshuffled?.splice(this.autoplayFrom(this.unshuffled), 0, ...tracks)
         this.emitQueue()
         if (wasEmpty) this.load(0, true)
         break
@@ -284,6 +314,7 @@ export class AudioEngine {
           this.index -= 1
         }
         this.emitQueue()
+        this.maybeAutoplay()
         break
       }
       case 'clearQueue':
@@ -298,6 +329,7 @@ export class AudioEngine {
       case 'setRepeat':
         this.repeat = (payload as PlayerCommands['setRepeat']).repeat
         this.emit('modeChanged', { repeat: this.repeat, shuffle: this.shuffle })
+        this.maybeAutoplay()
         break
       case 'setShuffle': {
         const { shuffle } = payload as PlayerCommands['setShuffle']
@@ -306,7 +338,10 @@ export class AudioEngine {
         const cur = this.current
         if (shuffle) {
           this.unshuffled = [...this.queue]
-          this.queue = shuffleKeepingFirst(this.queue, this.index)
+          // The playing song up front, then yours, then autoplay's, each lot shuffled on its own.
+          const from = this.autoplayFrom(this.queue)
+          const others = (part: Track[]): Track[] => shuffled(part.filter((t) => t !== cur))
+          this.queue = [...(cur ? [cur] : []), ...others(this.queue.slice(0, from)), ...others(this.queue.slice(from))]
           this.index = cur ? 0 : -1
         } else if (this.unshuffled) {
           this.queue = this.unshuffled
@@ -315,6 +350,7 @@ export class AudioEngine {
         }
         this.emit('modeChanged', { repeat: this.repeat, shuffle: this.shuffle })
         this.emitQueue()
+        this.maybeAutoplay()
         break
       }
     }
@@ -481,6 +517,7 @@ export class AudioEngine {
     this.queue = []
     this.unshuffled = null
     this.index = -1
+    this.ask = null
     this.stopTimers()
     this.emitQueue()
     this.emit('trackChanged', { track: null, index: -1 })
@@ -494,9 +531,8 @@ export class AudioEngine {
     if (nextIndex >= this.queue.length) {
       if (this.repeat === 'all' || userInitiated) nextIndex = 0
       else {
-        this.audio.pause()
-        this.audio.currentTime = 0
-        this.emitPosition()
+        // Autoplay is still looking: wait at the end, and its answer carries on from there.
+        if (this.ask?.answered !== false) this.rewind()
         return
       }
     }
@@ -545,8 +581,92 @@ export class AudioEngine {
     else void this.client.scrobble(track.id, true).catch(() => undefined)
   }
 
+  /** Rest on the last song, paused back at its start, once the queue has run out. */
+  private rewind(): void {
+    this.audio.pause()
+    this.audio.currentTime = 0
+    this.emitPosition()
+  }
+
+  /** Swap the whole queue out. An answer still out for the old queue is dropped when it lands. */
+  private replaceQueue(tracks: Track[], index: number): void {
+    this.ask = null
+    this.unshuffled = null
+    this.queue = [...tracks]
+    if (this.shuffle && this.queue.length > 1) {
+      this.unshuffled = [...this.queue]
+      this.queue = shuffleKeepingFirst(this.queue, index)
+      this.index = 0
+    } else {
+      this.index = clamp(index, 0, Math.max(0, this.queue.length - 1))
+    }
+  }
+
+  /** Where the run of autoplayed songs that ends `list` begins; its length when there is none. */
+  private autoplayFrom(list: Track[]): number {
+    let i = list.length
+    while (i > 0 && this.autoplayed.has(list[i - 1])) i--
+    return i
+  }
+
+  /** With autoplay on, ask for more once the last song in the queue is playing, once per song. */
+  private maybeAutoplay(): void {
+    const last = this.queue[this.queue.length - 1]
+    if (!this.autoplay || this.repeat !== 'off' || this.audio.paused || !last || this.current !== last) return
+    if (this.ask && (!this.ask.answered || this.ask.after === last)) return
+    // The songs heard last, the playing one first.
+    const seeds = this.queue.slice(Math.max(0, this.index + 1 - AUTOPLAY_SEEDS), this.index + 1).reverse()
+    this.askFor(seeds, AUTOPLAY_COUNT, true)
+  }
+
+  /**
+   * Fetch `count` songs like `seeds`, the one asking first, and append them once they arrive:
+   * as autoplay's, or as part of the queue proper for a song radio. Offline, only songs on this
+   * device. A failure is logged and leaves the queue as it was.
+   */
+  private askFor(seeds: Track[], count: number, autoplayed: boolean): void {
+    const client = this.client
+    if (!client || !seeds.length) return
+    const ask = { after: seeds[0], answered: false }
+    this.ask = ask
+    void radio(client, {
+      seeds,
+      count,
+      exclude: new Set(this.queue.map((t) => t.id)),
+      shuffleSeed: `${seeds[0].id}:${Date.now()}`,
+      playable: this.online ? undefined : this.available
+    })
+      .catch((err: unknown) => {
+        console.warn('[engine] could not find songs to carry on with', err)
+        return []
+      })
+      .then((tracks) => {
+        if (this.ask !== ask) return
+        ask.answered = true
+        this.land(tracks, autoplayed)
+      })
+  }
+
+  /** Append what an ask brought back, and carry on into it when the queue ran out while it was out. */
+  private land(tracks: Track[], autoplayed: boolean): void {
+    const queued = new Set(this.queue.map((t) => t.id))
+    const fresh = tracks.filter((t) => !queued.has(t.id))
+    const ranOut = this.audio.ended
+    if (!fresh.length) {
+      if (ranOut) this.rewind()
+      return
+    }
+    const at = this.queue.length
+    this.queue.push(...fresh)
+    // Shuffle or not, they go after everything already lined up.
+    this.unshuffled?.push(...fresh)
+    if (autoplayed) for (const t of fresh) this.autoplayed.add(t)
+    this.emitQueue()
+    if (ranOut) this.load(at, true)
+  }
+
   private emitQueue(): void {
-    this.emit('queueChanged', { queue: this.queue, index: this.index })
+    this.emit('queueChanged', { queue: this.queue, index: this.index, autoplayFrom: this.autoplayFrom(this.queue) })
   }
 
   private emitPosition(): void {
@@ -607,11 +727,16 @@ export class AudioEngine {
 }
 
 function shuffleKeepingFirst(tracks: Track[], firstIndex: number): Track[] {
-  const rest = tracks.filter((_, i) => i !== firstIndex)
-  for (let i = rest.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[rest[i], rest[j]] = [rest[j], rest[i]]
-  }
+  const rest = shuffled(tracks.filter((_, i) => i !== firstIndex))
   const first = tracks[firstIndex]
   return first ? [first, ...rest] : rest
+}
+
+function shuffled<T>(items: T[]): T[] {
+  const out = [...items]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
 }

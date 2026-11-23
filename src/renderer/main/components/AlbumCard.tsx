@@ -9,7 +9,7 @@ import { parseDiscName } from '@shared/format'
 import { Cover } from '@renderer/shared/Cover'
 import { useClient } from '@renderer/shared/sessionStore'
 import { nav, type View } from '../nav'
-import { albumRecent, albumSongs, playFrom, usePlayingState } from '../recents'
+import { albumRecent, albumSongs, playFrom, playRadio, usePlayingState } from '../recents'
 import { playlistRecent } from '../playlists'
 import { loadPlaylist } from '../downloads'
 import { useContextMenu } from './ContextMenu'
@@ -236,6 +236,7 @@ export function Tile({
   const play = async (e?: React.MouseEvent): Promise<void> => {
     e?.stopPropagation()
     if (current) return player.toggle()
+    if (recent?.radio && recent.track) return playRadio(recent.track)
     if (!client || busy) return
     setBusy(true)
     try {
