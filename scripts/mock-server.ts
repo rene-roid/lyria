@@ -63,7 +63,20 @@ const songs = [
   }
 })
 const playlists = [
-  { id: 'pl1', name: 'Focus', owner: 'admin', public: true, songCount: 3, duration: 36, created: '2024-06-01T00:00:00Z', entry: ['s1', 's4', 's6'] }
+  { id: 'pl1', name: 'Focus', owner: 'admin', public: true, songCount: 3, duration: 36, created: '2024-06-01T00:00:00Z', entry: ['s1', 's4', 's6'] },
+  { id: 'pl2', name: 'Late Night Radio', owner: 'admin', public: true, songCount: 2, duration: 24, created: '2024-06-02T00:00:00Z', entry: ['s2', 's5'] },
+  { id: 'pl3', name: 'Radiohead Essentials', owner: 'admin', public: true, songCount: 2, duration: 24, created: '2024-06-03T00:00:00Z', entry: ['s3', 's1'] },
+  {
+    id: 'pl4',
+    name: '🟠 Artist Radio 1',
+    comment: 'NaviBeat Mixes: everything you have by Aurora. A different artist each week.\nMade by NaviBeat  ·  navibeat.app\nnb1:artistradio:artistradio-1:2026-10-15:fallback:30',
+    owner: 'admin',
+    public: false,
+    songCount: 2,
+    duration: 24,
+    created: '2024-06-04T00:00:00Z',
+    entry: ['s4', 's6']
+  }
 ]
 
 // ---- audio: 12s WAV with a gentle pulse so the visualiser has something to show -------------

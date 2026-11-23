@@ -165,16 +165,52 @@ export function mixOrder(m: ServerMix, hour: number): number {
 }
 
 export type MixPlaylist = Playlist & { mix: ServerMix }
+/** NaviBeat's radios keep their mix, for the title and cover they wear; any other radio is a plain playlist. */
+export type RadioPlaylist = Playlist & { mix?: ServerMix }
 
-/** The server's playlists split into its mixes, in the web UI's order, and the user's own. */
-export function splitPlaylists(lists: Playlist[] = [], hour = new Date().getHours()): { mixes: MixPlaylist[]; own: Playlist[] } {
-  const mixes: MixPlaylist[] = []
+/** What a server playlist is, every one exactly one of these. */
+export type PlaylistClass = { kind: 'radio'; mix?: ServerMix } | { kind: 'mix'; mix: ServerMix } | { kind: 'playlist' }
+
+/** "Radio" as a word, so a playlist about Radiohead is not one. */
+const RADIO_NAME = /\bradio\b/i
+/** How the tools that build radios describe them: "Radio station based on ...", "Artist radio for ...". */
+const RADIO_COMMENT = /\b(radio (station|mix|playlist)|(artist|song|track|genre|album) radio)\b/i
+const RADIO_KINDS = ['artistradio', 'genreradio']
+
+export function classifyPlaylist(name: string, comment = ''): PlaylistClass {
+  const mix = parseMix(name, comment)
+  if (mix) return RADIO_KINDS.includes(mix.kind) ? { kind: 'radio', mix } : { kind: 'mix', mix }
+  return RADIO_NAME.test(name) || RADIO_COMMENT.test(comment) ? { kind: 'radio' } : { kind: 'playlist' }
+}
+
+/**
+ * The server's playlists split into the user's own, its radios and its other mixes, the mixes in
+ * the web UI's order.
+ */
+export function splitPlaylists(
+  lists: Playlist[] = [],
+  hour = new Date().getHours()
+): { own: Playlist[]; radios: RadioPlaylist[]; mixes: MixPlaylist[] } {
   const own: Playlist[] = []
+  const radios: RadioPlaylist[] = []
+  const mixes: MixPlaylist[] = []
   for (const p of lists) {
-    const mix = parseMix(p.name, p.comment)
-    if (mix) mixes.push({ ...p, mix })
+    const c = classifyPlaylist(p.name, p.comment)
+    if (c.kind === 'mix') mixes.push({ ...p, mix: c.mix })
+    else if (c.kind === 'radio') radios.push(c.mix ? { ...p, mix: c.mix } : p)
     else own.push(p)
   }
   mixes.sort((a, b) => mixOrder(a.mix, hour) - mixOrder(b.mix, hour))
-  return { mixes, own }
+  return { own, radios, mixes }
+}
+
+/** Every mix of the web UI's shelves, NaviBeat's radios back among them, in its order. */
+export function shelfMixes(radios: RadioPlaylist[], mixes: MixPlaylist[], hour = new Date().getHours()): MixPlaylist[] {
+  const all = [...mixes, ...radios.filter((r): r is MixPlaylist => !!r.mix)]
+  return all.sort((a, b) => mixOrder(a.mix, hour) - mixOrder(b.mix, hour))
+}
+
+/** The ones the user has not hidden from their library. */
+export function withoutHidden<T extends { id: string }>(items: T[], hidden: string[]): T[] {
+  return items.filter((p) => !hidden.includes(p.id))
 }
