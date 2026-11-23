@@ -156,6 +156,22 @@
   }
 }
 
+/*
+ * With the aurora behind the page, Home's own tint gives way to its sky, and a cover's colour band
+ * only tints it so the curtains still show through behind the header. Keyed on the aurora layer
+ * itself, so a machine without WebGL2, which never gets one, keeps the plain look whole.
+ */
+[data-aurora] ~ [data-scroll] .home-tint {
+  display: none;
+}
+[data-aurora] ~ [data-scroll] .page-tint {
+  opacity: 0.5;
+}
+/* A soft shadow under the page's text keeps it readable where it crosses a bright curtain. */
+[data-aurora] ~ [data-scroll] {
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}
+
 .text-shadow {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }

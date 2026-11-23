@@ -159,7 +159,7 @@ function OfflineHome() {
 
   return (
     <div>
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-[#2e2745]" />
+      <div className="home-tint pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-[#2e2745]" />
       <div className="mb-8 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-[32px] font-bold tracking-tight">You're offline</h1>
@@ -218,7 +218,7 @@ function OnlineHome() {
   return (
     <div>
       {/* The web UI's tint behind the greeting, fading into the panel. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-[#2e2745]" />
+      <div className="home-tint pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-[#2e2745]" />
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-[32px] font-bold tracking-tight">{greeting}</h1>
         <GhostButton

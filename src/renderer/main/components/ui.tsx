@@ -160,10 +160,11 @@ function Hero({
           <div className="truncate text-2xl font-bold tracking-tight">{title}</div>
         </div>
       </div>
-      <header
-        className="-mx-6 flex items-end gap-6 px-6 pt-16 pb-6"
-        style={{ ...band, backgroundImage: 'linear-gradient(transparent, rgba(0,0,0,0.5))' }}
-      >
+      <header className="relative -mx-6 flex items-end gap-6 px-6 pt-16 pb-6">
+        <div
+          className="page-tint pointer-events-none absolute inset-0 -z-10"
+          style={{ ...band, backgroundImage: 'linear-gradient(transparent, rgba(0,0,0,0.5))' }}
+        />
         {/* drop-shadow, not box-shadow: it follows the cover's shape, so a round artist photo gets a round one. */}
         <div className="shrink-0 drop-shadow-[0_8px_32px_rgba(0,0,0,0.5)]">{cover}</div>
         <div className="min-w-0 flex-1">
@@ -176,7 +177,7 @@ function Hero({
       </header>
       <div ref={strip} className="relative mb-4 flex min-h-8 items-center gap-5 pt-6 pb-4">
         <div
-          className="pointer-events-none absolute -inset-x-6 top-0 -z-10 h-60"
+          className="page-tint pointer-events-none absolute -inset-x-6 top-0 -z-10 h-60"
           style={{ ...band, backgroundImage: 'linear-gradient(rgba(0,0,0,0.6), var(--color-surface-2))' }}
         />
         {play && <PlayCircle {...play} />}

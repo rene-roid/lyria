@@ -20,6 +20,8 @@ import { SearchView } from './views/SearchView'
 import { Favorites } from './views/Favorites'
 import { SettingsView } from './views/SettingsView'
 import { player, usePlayerStore } from '@renderer/shared/playerStore'
+import { useSettings } from '@renderer/shared/sessionStore'
+import { Aurora } from './Aurora'
 
 function Content() {
   const view = useNav((s) => s.view)
@@ -118,6 +120,7 @@ const focusSearch = (): void => {
 export function Shell() {
   const showQueue = useNav((s) => s.showQueue)
   const showLyrics = useNav((s) => s.showLyrics)
+  const { background, aurora } = useSettings()
 
   // Space toggles playback unless typing in an input; see the handlers for the rest.
   useEffect(() => {
@@ -164,6 +167,7 @@ export function Shell() {
       <div className="flex min-h-0 flex-1 gap-2 px-2">
         <Sidebar />
         <main className="relative min-w-0 flex-1 overflow-hidden rounded-lg bg-surface-2">
+          {background === 'aurora' && <Aurora options={aurora} hidden={showLyrics} className="absolute inset-0" />}
           <Page />
           {showLyrics && <LyricsView />}
         </main>
