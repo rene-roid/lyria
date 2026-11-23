@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Disc3, X } from 'lucide-react'
+import { Ban, Disc3, X } from 'lucide-react'
 import {
   AURORA_INTENSITY,
   AURORA_PRESETS,
@@ -8,6 +8,7 @@ import {
   type AuroraOptions
 } from '@shared/aurora'
 import type {
+  Blocked,
   DownloadStatus,
   MiniOptions,
   NormalizeMode,
@@ -31,7 +32,8 @@ import {
   THEMES,
   VISUALIZER_COLORS,
   VISUALIZER_STYLES,
-  widgetSize
+  widgetSize,
+  withBlock
 } from '@shared/types'
 import type { ServerProbe } from '@shared/subsonic/client'
 import { clearCache } from '@renderer/shared/cache'
@@ -1013,6 +1015,41 @@ function NormalizeSetting({ value, onChange }: { value: NormalizeMode; onChange:
   )
 }
 
+/** How each don't-play list is labelled in Settings, artists first. */
+const BLOCKED_LISTS: [keyof Blocked, string][] = [
+  ['artists', 'Artist'],
+  ['songs', 'Song']
+]
+
+/** Everything on the don't-play list, each with a way to take it off. */
+function DontPlaySection({ blocked, onChange }: { blocked: Blocked; onChange: (blocked: Blocked) => void }) {
+  const entries = BLOCKED_LISTS.flatMap(([list, kind]) => blocked[list].map((entry) => ({ list, kind, entry })))
+  return (
+    <section className="mb-8">
+      <SectionHeader title="Don't play" />
+      <p className="mb-3 px-3 text-xs text-ink-3">
+        Skipped in every queue, and left out of mixes, radios and autoplay. Add songs and artists from a song's menu.
+      </p>
+      {entries.length === 0 ? (
+        <div className="px-3 py-2 text-xs text-ink-3">Nothing yet.</div>
+      ) : (
+        <ul>
+          {entries.map(({ list, kind, entry }) => (
+            <li key={`${list}:${entry.id}`} className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-white/[0.04]">
+              <Ban className="h-4 w-4 shrink-0 text-ink-3" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">{entry.name}</span>
+                <span className="block truncate text-xs text-ink-2">{entry.by ? `${kind} · ${entry.by}` : kind}</span>
+              </span>
+              <GhostButton onClick={() => onChange(withBlock(blocked, list, entry, false))}>Unblock</GhostButton>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 const downloadStats = (): Promise<CacheStats> => window.lyria.downloads.stats()
 
 /** Everything kept for offline listening, how far each has got, and a way to let it go. */
@@ -1307,6 +1344,8 @@ export function SettingsView() {
           onChange={(v) => update({ autoplay: v })}
         />
       </section>
+
+      <DontPlaySection blocked={settings.blocked} onChange={(blocked) => update({ blocked })} />
 
       <section className="mb-8">
         <SectionHeader title="Library" />
