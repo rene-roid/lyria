@@ -4,6 +4,7 @@
  */
 
 import type { AlbumListType, Playlist } from './subsonic/types'
+import { defaultAuroraOptions, type AuroraOptions, type BackgroundKind } from './aurora'
 
 export interface Track {
   id: string
@@ -587,6 +588,9 @@ export interface Settings {
   /** Also match soundtrack wording in the album title, not just the genre tag. */
   soundtrackTitleMatch: boolean
   theme: ThemeName
+  background: BackgroundKind
+  /** The aurora's look, kept while the background is plain so turning it back on finds it as it was. */
+  aurora: AuroraOptions
 }
 
 export const defaultSettings: Settings = {
@@ -614,18 +618,21 @@ export const defaultSettings: Settings = {
   savedPlaylists: [],
   hiddenPlaylists: [],
   soundtrackTitleMatch: true,
-  theme: 'blue'
+  theme: 'blue',
+  background: 'none',
+  aurora: defaultAuroraOptions
 }
 
 /**
  * What a caller may hand to `settings.update`. The nested groups merge field by field, so a
  * window can flip one option without having to echo back the rest.
  */
-export type SettingsPatch = Partial<Omit<Settings, 'widget' | 'widgets' | 'mini' | 'toast'>> & {
+export type SettingsPatch = Partial<Omit<Settings, 'widget' | 'widgets' | 'mini' | 'toast' | 'aurora'>> & {
   widget?: Partial<WidgetOptions>
   mini?: Partial<MiniOptions>
   toast?: Partial<ToastOptions>
   widgets?: Partial<Settings['widgets']>
+  aurora?: Partial<AuroraOptions>
 }
 
 export interface LyricLine {

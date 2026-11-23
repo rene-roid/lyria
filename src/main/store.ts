@@ -1,5 +1,6 @@
 import Store from 'electron-store'
 import { defaultSettings, type Settings, type SettingsPatch } from '@shared/types'
+import { sanitizeAurora, sanitizeBackground } from '@shared/aurora'
 import { clamp, sanitizeMini, sanitizeToast, sanitizeWidget } from './overlayOptions'
 
 interface Schema {
@@ -34,6 +35,8 @@ function readSettings(): Settings {
     widget: sanitizeWidget(saved.widget),
     mini: sanitizeMini(saved.mini),
     toast: sanitizeToast(saved.toast),
+    background: sanitizeBackground(saved.background),
+    aurora: sanitizeAurora(saved.aurora),
     windowBounds: { ...(saved.windowBounds ?? {}) },
     // Entries written before the shelf stored an origin have no key and cannot be played.
     recents: (saved.recents ?? []).filter((r) => r?.key),
@@ -98,6 +101,8 @@ export function updateSettings(patch: SettingsPatch): Settings {
     widget: sanitizeWidget({ ...before.widget, ...(patch.widget ?? {}) }),
     mini: sanitizeMini({ ...before.mini, ...(patch.mini ?? {}) }),
     toast: sanitizeToast({ ...before.toast, ...(patch.toast ?? {}) }),
+    background: sanitizeBackground(patch.background ?? before.background),
+    aurora: sanitizeAurora({ ...before.aurora, ...(patch.aurora ?? {}) }),
     windowBounds: { ...before.windowBounds, ...(patch.windowBounds ?? {}) }
   })
   cached = next
