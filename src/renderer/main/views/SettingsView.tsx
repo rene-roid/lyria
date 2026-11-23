@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { X } from 'lucide-react'
+import { Disc3, X } from 'lucide-react'
+import {
+  AURORA_INTENSITY,
+  AURORA_PRESETS,
+  BACKGROUNDS,
+  type AuroraColors,
+  type AuroraOptions
+} from '@shared/aurora'
 import type {
   DownloadStatus,
   MiniOptions,
@@ -31,6 +38,8 @@ import { clearCache } from '@renderer/shared/cache'
 import { Cover } from '@renderer/shared/Cover'
 import { nativeAcrylic, overlayCard } from '@renderer/shared/overlay'
 import { WidgetCard } from '@renderer/widget/WidgetCard'
+import { usePlayerState } from '@renderer/shared/playerStore'
+import { Aurora, useCoverAurora } from '../Aurora'
 import { downloads, useDownloads } from '../downloads'
 import type { RadioPlaylist } from '@shared/navimix'
 import { toggleHiddenPlaylist, useHiddenPlaylists, useServerPlaylists } from '../playlists'
@@ -813,6 +822,159 @@ function ThemePicker({ value, onChange }: { value: ThemeName; onChange: (v: Them
   )
 }
 
+const conic = (c: readonly string[]): string => `conic-gradient(${[...c, c[0]].join(', ')})`
+
+/** A round palette choice with its name under it, as navidroid's appearance screen has them. */
+function PaletteSwatch({
+  label,
+  fill,
+  selected,
+  onClick,
+  children
+}: {
+  label: string
+  fill?: string
+  selected: boolean
+  onClick: () => void
+  children?: ReactNode
+}) {
+  return (
+    <button
+      aria-pressed={selected}
+      onClick={onClick}
+      className="flex w-16 flex-col items-center gap-1.5 rounded-md py-1.5 transition hover:bg-white/[0.06]"
+    >
+      <span className={`rounded-full border-2 p-[3px] transition ${selected ? 'border-white' : 'border-transparent'}`}>
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-3 text-ink-2" style={{ background: fill }}>
+          {children}
+        </span>
+      </span>
+      <span className={`text-xs ${selected ? 'text-ink' : 'text-ink-2'}`}>{label}</span>
+    </button>
+  )
+}
+
+function BackgroundSettings({ settings, onChange }: { settings: Settings; onChange: (p: SettingsPatch) => void }) {
+  const { background, aurora } = settings
+  const cover = useCoverAurora(usePlayerState((s) => s.track?.coverArt))
+  const set = (patch: Partial<AuroraOptions>): void => onChange({ aurora: patch })
+  const on = background === 'aurora'
+  return (
+    <>
+      <div className="flex items-center justify-between gap-6 rounded-md px-3 py-3">
+        <div>
+          <div className="text-sm font-medium">Background</div>
+          <div className="text-xs text-ink-2">
+            {on ? 'A night sky with northern lights behind the pages' : 'The plain dark panel. The swatch shows the aurora as it would look.'}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-4">
+          {/* A phone-shaped sky cropped to the band the curtains fill. The rays scale with the height they
+              are drawn in, so it is drawn at twice the size and shrunk, or the finest would fall between pixels. */}
+          <div className="relative h-[100px] w-[160px] overflow-hidden rounded-md border border-white/10 bg-surface-2">
+            <Aurora options={aurora} className="absolute -top-3 left-0 h-[500px] w-[320px] origin-top-left scale-50" />
+          </div>
+          <div className="flex rounded-md border border-white/10 p-0.5">
+            {BACKGROUNDS.map((b) => (
+              <button
+                key={b.value}
+                aria-pressed={b.value === background}
+                onClick={() => onChange({ background: b.value })}
+                className={`rounded px-2.5 py-1 text-xs transition ${
+                  b.value === background ? 'bg-accent font-semibold text-black' : 'text-ink-2 hover:text-ink'
+                }`}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {on && (
+        <>
+          <div className="px-3 py-3">
+            <div className="text-sm font-medium">Colours</div>
+            <div className="text-xs text-ink-2">
+              {aurora.palette === 'cover'
+                ? 'Taken from the playing song’s cover, easing over when the song changes; Classic until there is one'
+                : aurora.palette === 'custom'
+                  ? 'Your own four, one for each curtain edge'
+                  : 'A fixed palette, whatever is playing'}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1">
+              <PaletteSwatch
+                label="Cover"
+                fill={cover ? conic(cover) : undefined}
+                selected={aurora.palette === 'cover'}
+                onClick={() => set({ palette: 'cover' })}
+              >
+                {!cover && <Disc3 size={18} />}
+              </PaletteSwatch>
+              {AURORA_PRESETS.map((p) => (
+                <PaletteSwatch
+                  key={p.value}
+                  label={p.label}
+                  fill={conic(p.colors)}
+                  selected={aurora.palette === p.value}
+                  onClick={() => set({ palette: p.value })}
+                />
+              ))}
+              <PaletteSwatch
+                label="Custom"
+                fill={conic(aurora.custom)}
+                selected={aurora.palette === 'custom'}
+                onClick={() => set({ palette: 'custom' })}
+              />
+            </div>
+            {aurora.palette === 'custom' && (
+              <div className="mt-3 flex items-center gap-3">
+                {aurora.custom.map((c, i) => (
+                  <label
+                    key={i}
+                    title={`Colour ${i + 1}`}
+                    className="relative h-8 w-8 cursor-pointer overflow-hidden rounded-full border border-white/20"
+                    style={{ background: c }}
+                  >
+                    <input
+                      type="color"
+                      aria-label={`Colour ${i + 1}`}
+                      value={c}
+                      onChange={(e) => {
+                        const custom = [...aurora.custom] as AuroraColors
+                        custom[i] = e.target.value
+                        set({ custom })
+                      }}
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                    />
+                  </label>
+                ))}
+                <span className="text-xs text-ink-3">Click a colour to change it</span>
+              </div>
+            )}
+          </div>
+          <SliderRow
+            label="Intensity"
+            description="How brightly the curtains glow"
+            value={Math.round(aurora.intensity * 100)}
+            min={AURORA_INTENSITY.min * 100}
+            max={AURORA_INTENSITY.max * 100}
+            step={5}
+            inputStep={1}
+            unit="%"
+            onChange={(pct) => set({ intensity: pct / 100 })}
+          />
+          <Toggle
+            label="React to music"
+            description="Taller curtains when it is loud, a flash along the rim on the beat"
+            checked={aurora.reactive}
+            onChange={(reactive) => set({ reactive })}
+          />
+        </>
+      )}
+    </>
+  )
+}
+
 const NORMALIZE_MODES: { value: NormalizeMode; label: string }[] = [
   { value: 'off', label: 'Off' },
   { value: 'album', label: 'Per album' },
@@ -1097,6 +1259,7 @@ export function SettingsView() {
       <section className="mb-8">
         <SectionHeader title="Appearance" />
         <ThemePicker value={settings.theme} onChange={(theme) => update({ theme })} />
+        <BackgroundSettings settings={settings} onChange={update} />
       </section>
 
       <section className="mb-8">
