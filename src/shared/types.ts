@@ -397,11 +397,61 @@ export const CARD_SIZES: { value: CardSize; label: string }[] = [
   { value: 'large', label: 'Large' }
 ]
 
+export type VisualizerStyle = 'off' | 'bars' | 'mirror' | 'wave'
+
+export const VISUALIZER_STYLES: { value: VisualizerStyle; label: string }[] = [
+  { value: 'off', label: 'Off' },
+  { value: 'bars', label: 'Bars' },
+  { value: 'mirror', label: 'Mirror' },
+  { value: 'wave', label: 'Wave' }
+]
+
+/** `cover` is a bright take on the playing cover's own colour. */
+export type VisualizerColor = 'accent' | 'cover' | 'white'
+
+export const VISUALIZER_COLORS: { value: VisualizerColor; label: string }[] = [
+  { value: 'accent', label: 'Accent' },
+  { value: 'cover', label: 'Cover' },
+  { value: 'white', label: 'White' }
+]
+
+/**
+ * What the taskbar widget and the mini player share beyond the chrome: how the card picks up
+ * the playing song, and which controls it carries besides the transport buttons.
+ */
+export interface PlayerLook {
+  /** Wash the card in a colour picked from the cover, easing from one track to the next. */
+  tint: boolean
+  visualizer: VisualizerStyle
+  visualizerColor: VisualizerColor
+  /** Heart the playing song, after the next button. */
+  like: boolean
+  /** Shuffle toggle, before the previous button. */
+  shuffle: boolean
+}
+
+export const defaultPlayerLook: PlayerLook = {
+  tint: false,
+  visualizer: 'off',
+  visualizerColor: 'accent',
+  like: false,
+  shuffle: false
+}
+
+/** The widget card's corners. A pill rounds the cover too, so it sits concentric with the ends. */
+export type CornerStyle = 'square' | 'rounded' | 'pill'
+
+export const CORNER_STYLES: { value: CornerStyle; label: string }[] = [
+  { value: 'square', label: 'Square' },
+  { value: 'rounded', label: 'Rounded' },
+  { value: 'pill', label: 'Pill' }
+]
+
 /** Layout and chrome of the taskbar widget. Main sizes and places the window from these. */
-export interface WidgetOptions extends OverlayChrome {
+export interface WidgetOptions extends OverlayChrome, PlayerLook {
   placement: WidgetPlacement
   size: CardSize
-  visualizer: boolean
+  corners: CornerStyle
   /** Thin accent progress line along the bottom edge. */
   progress: boolean
   cover: boolean
@@ -411,20 +461,22 @@ export interface WidgetOptions extends OverlayChrome {
 
 export const defaultWidgetOptions: WidgetOptions = {
   ...defaultOverlayChrome,
+  ...defaultPlayerLook,
   placement: { kind: 'anchor', anchor: HOME_ANCHOR },
   size: 'medium',
-  visualizer: true,
+  corners: 'rounded',
+  visualizer: 'bars',
   progress: true,
   cover: true,
   elapsed: false
 }
 
 /** The mini player's options. Its position lives in `windowBounds`, wherever it was dragged. */
-export interface MiniOptions extends OverlayChrome {
+export interface MiniOptions extends OverlayChrome, PlayerLook {
   size: CardSize
 }
 
-export const defaultMiniOptions: MiniOptions = { ...defaultOverlayChrome, size: 'medium' }
+export const defaultMiniOptions: MiniOptions = { ...defaultOverlayChrome, ...defaultPlayerLook, size: 'medium' }
 
 /** Track-change toast. It never takes the mouse, so only the card's look and its corner apply. */
 export interface ToastOptions extends Pick<OverlayChrome, 'background' | 'opacity'> {
@@ -436,6 +488,11 @@ export const defaultToastOptions: ToastOptions = {
   background: 'solid',
   opacity: 1
 }
+
+/** Width an optional shuffle or like button adds: one compact button and the gap before it. */
+const EXTRA_BUTTON = 32
+
+const extraButtons = (o: PlayerLook): number => (o.like ? 1 : 0) + (o.shuffle ? 1 : 0)
 
 /**
  * The taskbar widget per size: the window's box with every part shown, the cover and the flex
@@ -454,20 +511,23 @@ export const WIDGET_LAYOUTS: Record<CardSize, { width: number; height: number; c
  */
 export function widgetSize(o: WidgetOptions): { width: number; height: number } {
   const l = WIDGET_LAYOUTS[o.size]
-  const width = l.width - (o.cover ? 0 : l.cover + l.gap) + (o.elapsed ? l.elapsed : 0)
+  const width = l.width - (o.cover ? 0 : l.cover + l.gap) + (o.elapsed ? l.elapsed : 0) + extraButtons(o) * EXTRA_BUTTON
   return { width, height: l.height }
 }
 
-/** The mini player per size: its window's box and the side of its cover. */
-export const MINI_LAYOUTS: Record<CardSize, { width: number; height: number; cover: number }> = {
-  small: { width: 300, height: 84, cover: 64 },
-  medium: { width: 340, height: 112, cover: 84 },
-  large: { width: 384, height: 148, cover: 124 }
+/**
+ * The mini player per size: its window's box, the side of its cover, and the width one more
+ * control button takes, which is bigger on large where the buttons are full size.
+ */
+export const MINI_LAYOUTS: Record<CardSize, { width: number; height: number; cover: number; button: number }> = {
+  small: { width: 300, height: 84, cover: 64, button: EXTRA_BUTTON },
+  medium: { width: 340, height: 112, cover: 84, button: EXTRA_BUTTON },
+  large: { width: 384, height: 148, cover: 124, button: EXTRA_BUTTON + 4 }
 }
 
 export function miniSize(o: MiniOptions): { width: number; height: number } {
-  const { width, height } = MINI_LAYOUTS[o.size]
-  return { width, height }
+  const l = MINI_LAYOUTS[o.size]
+  return { width: l.width + extraButtons(o) * l.button, height: l.height }
 }
 
 export interface Settings {

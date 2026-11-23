@@ -42,6 +42,27 @@ test('a v0.6.0 mini player block gets the medium size it always had', () => {
   expect(o.clickThrough).toBe(true)
 })
 
+test('a v0.6.0 visualiser switch becomes a style: on drew bars', () => {
+  expect(sanitizeWidget(v060 as never).visualizer).toBe('off')
+  expect(sanitizeWidget({ ...v060, visualizer: true } as never).visualizer).toBe('bars')
+  expect(sanitizeWidget({ visualizer: 'wave' }).visualizer).toBe('wave')
+  expect(sanitizeWidget({ visualizer: 'spiral' } as never).visualizer).toBe('bars')
+})
+
+test('the look options a v0.6.0 block never had start at their defaults', () => {
+  const o = sanitizeWidget(v060 as never)
+  expect(o.tint).toBe(false)
+  expect(o.visualizerColor).toBe('accent')
+  expect(o.like).toBe(false)
+  expect(o.shuffle).toBe(false)
+  expect(o.corners).toBe('rounded')
+  expect(sanitizeWidget({ corners: 'oval', visualizerColor: 'rainbow', tint: 'yes' } as never)).toMatchObject({
+    corners: 'rounded',
+    visualizerColor: 'accent',
+    tint: false
+  })
+})
+
 test('the rest of a v0.6.0 widget block carries over', () => {
   const o = sanitizeWidget(v060 as never)
   expect(o.background).toBe('acrylic')

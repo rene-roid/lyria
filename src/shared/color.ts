@@ -10,12 +10,12 @@ export function luminance([r, g, b]: number[]): number {
 const BINS = 12
 
 /**
- * A dark, saturated colour from an image's RGBA pixels, for page headers and the lyrics backdrop:
- * the browser stand-in for the Palette vibrant swatch navidroid uses. Colourful pixels are binned by
- * hue and the heaviest bin wins, so a red-and-blue cover comes out red or blue instead of their
- * muddy average. A grey cover falls back to its plain average. Darkened until white text reads on it.
+ * The colour an image's RGBA pixels mostly are: the browser stand-in for the Palette vibrant
+ * swatch navidroid uses. Colourful pixels are binned by hue and the heaviest bin wins, so a
+ * red-and-blue cover comes out red or blue instead of their muddy average. A grey cover falls
+ * back to its plain average.
  */
-export function headerColor(px: ArrayLike<number>): [number, number, number] {
+function dominantColor(px: ArrayLike<number>): number[] {
   const bins = Array.from({ length: BINS }, () => ({ r: 0, g: 0, b: 0, w: 0 }))
   const all = { r: 0, g: 0, b: 0, n: 0 }
   for (let i = 0; i + 3 < px.length; i += 4) {
@@ -38,8 +38,26 @@ export function headerColor(px: ArrayLike<number>): [number, number, number] {
     bin.w += w
   }
   const top = bins.reduce((a, b) => (b.w > a.w ? b : a))
-  let c =
-    top.w > 0 ? [top.r / top.w, top.g / top.w, top.b / top.w] : all.n ? [all.r / all.n, all.g / all.n, all.b / all.n] : [64, 64, 64]
+  return top.w > 0 ? [top.r / top.w, top.g / top.w, top.b / top.w] : all.n ? [all.r / all.n, all.g / all.n, all.b / all.n] : [64, 64, 64]
+}
+
+const rounded = (c: number[]): [number, number, number] => [Math.round(c[0]), Math.round(c[1]), Math.round(c[2])]
+
+/** A cover's colour for page headers, the lyrics backdrop and the floating cards' tint: darkened until white text reads on it. */
+export function headerColor(px: ArrayLike<number>): [number, number, number] {
+  let c = dominantColor(px)
   while (luminance(c) > 0.22) c = c.map((v) => v * 0.85)
-  return [Math.round(c[0]), Math.round(c[1]), Math.round(c[2])]
+  return rounded(c)
+}
+
+/**
+ * The same colour lit up to glow on a dark card, for the visualiser: brought to full strength,
+ * then eased toward white until it reads, so a dark cover still gives a visible hue.
+ */
+export function glowColor(px: ArrayLike<number>): [number, number, number] {
+  const d = dominantColor(px)
+  const peak = Math.max(...d, 1)
+  let c = d.map((v) => (v / peak) * 255)
+  while (luminance(c) < 0.3) c = c.map((v) => v + (255 - v) * 0.15)
+  return rounded(c)
 }

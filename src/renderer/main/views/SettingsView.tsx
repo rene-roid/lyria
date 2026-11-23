@@ -7,6 +7,7 @@ import type {
   OverlayAnchor,
   OverlayBackground,
   OverlayChrome,
+  PlayerLook,
   Session,
   Settings,
   SettingsPatch,
@@ -14,7 +15,16 @@ import type {
   ToastOptions,
   WidgetOptions
 } from '@shared/types'
-import { CARD_SIZES, HOME_ANCHOR, OVERLAY_ANCHORS, OVERLAY_BACKGROUNDS, THEMES } from '@shared/types'
+import {
+  CARD_SIZES,
+  CORNER_STYLES,
+  HOME_ANCHOR,
+  OVERLAY_ANCHORS,
+  OVERLAY_BACKGROUNDS,
+  THEMES,
+  VISUALIZER_COLORS,
+  VISUALIZER_STYLES
+} from '@shared/types'
 import type { ServerProbe } from '@shared/subsonic/client'
 import { clearCache } from '@renderer/shared/cache'
 import { Cover } from '@renderer/shared/Cover'
@@ -483,12 +493,6 @@ function TaskbarWidgetSettings({ value, onChange }: { value: WidgetOptions; onCh
         onChange={(size) => onChange({ size })}
       />
       <Toggle
-        label="Audio visualiser"
-        description="Live frequency bars behind the track details"
-        checked={value.visualizer}
-        onChange={(visualizer) => onChange({ visualizer })}
-      />
-      <Toggle
         label="Album art"
         description="Cover thumbnail on the left; click it to open Lyria"
         checked={value.cover}
@@ -506,12 +510,68 @@ function TaskbarWidgetSettings({ value, onChange }: { value: WidgetOptions; onCh
         checked={value.elapsed}
         onChange={(elapsed) => onChange({ elapsed })}
       />
+      <PlayerLookSettings value={value} onChange={onChange} />
+      <Choice
+        label="Corners"
+        description={
+          value.background === 'acrylic' && window.lyria.nativeAcrylic
+            ? 'Windows draws the corners of the acrylic backdrop itself'
+            : value.corners === 'pill'
+              ? 'Fully round ends, with a round cover to match'
+              : 'How rounded the card is'
+        }
+        options={CORNER_STYLES}
+        value={value.corners}
+        onChange={(corners) => onChange({ corners })}
+      />
       <ChromeSettings
         value={value}
         onChange={onChange}
         clickThroughHint="Clicks pass to whatever is behind the widget; its own buttons still work"
       />
     </section>
+  )
+}
+
+/** What the taskbar widget and the mini player both offer: the cover's colours and the extra buttons. */
+function PlayerLookSettings({ value, onChange }: { value: PlayerLook; onChange: (p: Partial<PlayerLook>) => void }) {
+  return (
+    <>
+      <Toggle
+        label="Tint from cover art"
+        description="A wash of the playing cover's colour across the card, easing into the next one as tracks change"
+        checked={value.tint}
+        onChange={(tint) => onChange({ tint })}
+      />
+      <Choice
+        label="Visualiser"
+        description="Live levels of the music behind the track details"
+        options={VISUALIZER_STYLES}
+        value={value.visualizer}
+        onChange={(visualizer) => onChange({ visualizer })}
+      />
+      {value.visualizer !== 'off' && (
+        <Choice
+          label="Visualiser colour"
+          description={value.visualizerColor === 'cover' ? 'A bright take on the playing cover' : 'The colour it draws in'}
+          options={VISUALIZER_COLORS}
+          value={value.visualizerColor}
+          onChange={(visualizerColor) => onChange({ visualizerColor })}
+        />
+      )}
+      <Toggle
+        label="Like button"
+        description="Save the playing song to Liked Songs, after the next button"
+        checked={value.like}
+        onChange={(like) => onChange({ like })}
+      />
+      <Toggle
+        label="Shuffle button"
+        description="Turn shuffle on and off, before the previous button"
+        checked={value.shuffle}
+        onChange={(shuffle) => onChange({ shuffle })}
+      />
+    </>
   )
 }
 
@@ -586,6 +646,7 @@ function MiniPlayerSettings({ value, onChange }: { value: MiniOptions; onChange:
         value={value.size}
         onChange={(size) => onChange({ size })}
       />
+      <PlayerLookSettings value={value} onChange={onChange} />
       <ChromeSettings
         value={value}
         onChange={onChange}
