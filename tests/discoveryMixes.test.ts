@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, setSystemTime, test } from 'bun
 import { SubsonicClient } from '../src/shared/subsonic/client'
 import { buildMix, discoverySeeds, type MixSeed } from '../src/renderer/main/mixes'
 import type { PlayHistory } from '../src/shared/playHistory'
-import type { DiscoveryKind, Session, Track } from '../src/shared/types'
+import { NO_BLOCKS, type DiscoveryKind, type Session, type Track } from '../src/shared/types'
 
 const session: Session = { server: 'http://s', username: 'u', token: 't', salt: 's' }
 
@@ -191,7 +191,7 @@ describe("from this device's play history alone", () => {
     'f3-0': played('Moss', 'f3', 'jazz', 2),
     i0: played('Stranger 0', 'si', 'indie', 3)
   }
-  const sources = { albums: async () => [], history: async () => history }
+  const sources = { albums: async () => [], history: async () => history, blocked: () => NO_BLOCKS }
 
   test('a server that reports no plays still gets a Discover mix, without the songs played here', async () => {
     const client = fakeClient({ taste: [], counts: false })

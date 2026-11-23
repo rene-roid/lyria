@@ -76,7 +76,8 @@ export function artistRadioRecent(artist: ArtistID3): RecentItem {
 
 /** Today's radio for an artist, built around everything they are on. */
 export async function artistRadioTracks(c: SubsonicClient, artist: ArtistID3 & { album: AlbumID3[] }): Promise<Track[]> {
-  return artistRadio(c, { id: artist.id, name: artist.name, songs: await artistTracks(c, artist) })
+  const { blocked } = useSessionStore.getState().settings
+  return artistRadio(c, { id: artist.id, name: artist.name, songs: await artistTracks(c, artist) }, blocked)
 }
 
 /** Whether the queue came from `key`, and whether it is playing right now. */

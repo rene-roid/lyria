@@ -98,12 +98,14 @@ async function boot(): Promise<void> {
     shuffle: s.shuffle,
     normalize: s.normalize,
     autoplay: s.autoplay,
+    blocked: s.blocked,
     resume: s.resume
   })
   auth.onChange(applySession)
   settings.onChange((next) => {
     engine.setNormalize(next.normalize)
     engine.setAutoplay(next.autoplay)
+    engine.setBlocked(next.blocked)
   })
 
   host.emit('hostReady', { ready: true })

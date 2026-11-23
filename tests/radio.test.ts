@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { artistRadio, radio, type RadioRequest, type RadioSource } from '../src/shared/radio'
-import type { Track } from '../src/shared/types'
+import { NO_BLOCKS, type Track } from '../src/shared/types'
 
 const song = (id: string, artist: string, genre?: string): Track => ({ id, title: id, artist, album: '', duration: 100, genre })
 
@@ -38,6 +38,7 @@ const ask = (over: Partial<RadioRequest>): RadioRequest => ({
   seeds: [seed],
   count: 10,
   exclude: new Set(['seed']),
+  blocked: NO_BLOCKS,
   shuffleSeed: 'test',
   ...over
 })
@@ -124,6 +125,17 @@ describe('radio', () => {
     expect(asked).toHaveLength(3)
   })
 
+  test("never hands back a song on the don't-play list, or one by an artist on it", async () => {
+    const by = (id: string, artistId: string): Track => ({ ...song(id, `artist ${id}`), artistId })
+    const featuring: Track = { ...song('feat', 'Kite feat. Ash'), artists: [{ id: 'kite', name: 'Kite' }, { id: 'ash', name: 'Ash' }] }
+    const s = server({
+      similar: { seed: [by('x1', 'ash'), by('x2', 'birch'), featuring, by('x3', 'cedar'), by('x4', 'dune')] }
+    })
+    const blocked = { songs: [{ id: 'x2', name: 'x2' }], artists: [{ id: 'ash', name: 'Ash' }] }
+    const out = await radio(s, ask({ count: 5, blocked }))
+    expect(sorted(out)).toEqual(['x3', 'x4'])
+  })
+
   test('nothing to go on, nothing asked', async () => {
     const s = server({})
     expect(await radio(s, ask({ seeds: [] }))).toEqual([])
@@ -144,7 +156,7 @@ describe('artist radio', () => {
       similar: { ar1: [...songs('x', 40), own[0]] },
       top: { Nova: [own[5], own[6]] }
     })
-    const out = await artistRadio(s, artist(own), 'Mon Nov 23 2026')
+    const out = await artistRadio(s, artist(own), NO_BLOCKS, 'Mon Nov 23 2026')
     expect(shape(out)).toBe(`${'N--'.repeat(16)}N-`)
     expect(out[0].id).toBe('n5')
     expect(out[3].id).toBe('n6')
@@ -158,17 +170,28 @@ describe('artist radio', () => {
       similar: { ar1: songs('x', 5) },
       genre: { indie: [...songs('i', 40, 'indie'), ...own], rock: songs('r', 40, 'rock') }
     })
-    const out = await artistRadio(s, artist(own), 'Mon Nov 23 2026')
+    const out = await artistRadio(s, artist(own), NO_BLOCKS, 'Mon Nov 23 2026')
     expect(shape(out)).toBe(`${'N--'.repeat(6)}${'-'.repeat(32)}`)
     expect(new Set(ids(out)).size).toBe(50)
     expect(s.calls).toEqual(['similar ar1 60', 'top Nova 10', 'genre indie 300', 'genre rock 300'])
   })
 
+  test("leaves out the artist's own songs and others' that are on the don't-play list", async () => {
+    const own = nova(20, ['indie'])
+    const s = server({ similar: { ar1: [...songs('x', 39), { ...song('ash', 'Ash'), artistId: 'ash' }] } })
+    const blocked = { songs: [{ id: 'n3', name: 'n3' }, { id: 'x7', name: 'x7' }], artists: [{ id: 'ash', name: 'Ash' }] }
+    const out = await artistRadio(s, artist(own), blocked, 'Mon Nov 23 2026')
+    expect(ids(out)).not.toContain('n3')
+    expect(ids(out)).not.toContain('x7')
+    expect(ids(out)).not.toContain('ash')
+    expect(shape(out)).toBe(`${'N--'.repeat(16)}N-`)
+  })
+
   test('the same all day, and different the next', async () => {
     const own = nova(20, ['indie'])
     const s = server({ similar: { ar1: songs('x', 40) } })
-    const today = await artistRadio(s, artist(own), 'Mon Nov 23 2026')
-    expect(ids(await artistRadio(s, artist(own), 'Mon Nov 23 2026'))).toEqual(ids(today))
-    expect(ids(await artistRadio(s, artist(own), 'Tue Nov 24 2026'))).not.toEqual(ids(today))
+    const today = await artistRadio(s, artist(own), NO_BLOCKS, 'Mon Nov 23 2026')
+    expect(ids(await artistRadio(s, artist(own), NO_BLOCKS, 'Mon Nov 23 2026'))).toEqual(ids(today))
+    expect(ids(await artistRadio(s, artist(own), NO_BLOCKS, 'Tue Nov 24 2026'))).not.toEqual(ids(today))
   })
 })

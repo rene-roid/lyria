@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
+  Ban,
+  CircleCheck,
   Disc3,
   Heart,
   HeartOff,
@@ -14,12 +16,12 @@ import {
   Trash2,
   Volume2
 } from 'lucide-react'
-import type { RecentItem, Track } from '@shared/types'
+import { isBlocked, withBlock, type Blocked, type BlockedEntry, type RecentItem, type Track } from '@shared/types'
 import { formatTime } from '@shared/format'
 import { parseMix } from '@shared/navimix'
 import { Cover } from '@renderer/shared/Cover'
 import { player, usePlayerState } from '@renderer/shared/playerStore'
-import { useClient } from '@renderer/shared/sessionStore'
+import { useClient, useSettings } from '@renderer/shared/sessionStore'
 import { nav } from '../nav'
 import { useOffline, useOnDevice } from '../offline'
 import { playFrom, playRadio } from '../recents'
@@ -28,6 +30,16 @@ import { useAsync } from '../useAsync'
 import { clickAction, noSelection, rowKeys, select, selectedIndexes, type SelectAction } from '../selection'
 import { ContextMenu, MenuItem, MenuLabel, MenuSeparator, useContextMenu, type MenuPos } from './ContextMenu'
 import { ArtistLinks, creditsOf } from './ArtistLinks'
+
+/** Why a row will not play, if it will not: on the don't-play list, or offline with no copy on this device. */
+type Unplayable = 'blocked' | 'offline' | null
+
+const UNPLAYABLE_HINT: Record<NonNullable<Unplayable>, string> = {
+  blocked: "On your Don't play list, so it is skipped",
+  offline: 'Not on this device; plays once Lyria can reach your server'
+}
+
+const songEntry = (t: Track): BlockedEntry => ({ id: t.id, name: t.title, by: t.artist })
 
 export function TrackList({
   tracks,
@@ -60,6 +72,9 @@ export function TrackList({
   const offline = useOffline()
   // Offline, the songs that can still play; the rest are greyed out, as Spotify does.
   const local = useOnDevice(tracks)
+  const blocked = useSettings().blocked
+  const unplayable = (t: Track): Unplayable =>
+    isBlocked(blocked, t) ? 'blocked' : local !== null && !local.has(t.id) ? 'offline' : null
   const menu = useContextMenu()
   const [menuIndex, setMenuIndex] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
@@ -185,7 +200,7 @@ export function TrackList({
             showCover={showCover}
             numbered={numbered}
             canStar={Boolean(client) && !offline}
-            unavailable={local !== null && !local.has(t.id)}
+            unplayable={unplayable(t)}
             onPlay={onPlay}
             onSelect={onSelect}
             onMenu={onMenu}
@@ -206,7 +221,7 @@ export function TrackList({
         <SelectionMenu
           pos={menu.pos}
           tracks={chosenTracks}
-          playable={chosenTracks.filter((t) => local === null || local.has(t.id))}
+          playable={chosenTracks.filter((t) => !unplayable(t))}
           starred={chosenTracks.every(isStarred)}
           onClose={menu.close}
           onStar={(next) => void setStarredAll(chosenTracks, next)}
@@ -225,7 +240,7 @@ export function TrackList({
           pos={menu.pos}
           track={tracks[menuIndex]}
           starred={isStarred(tracks[menuIndex])}
-          unavailable={local !== null && !local.has(tracks[menuIndex].id)}
+          unavailable={unplayable(tracks[menuIndex]) !== null}
           onClose={menu.close}
           onPlay={() => onPlay(menuIndex)}
           onToggleStar={() => void toggleStar(tracks[menuIndex])}
@@ -256,7 +271,7 @@ const TrackRow = memo(function TrackRow({
   showCover,
   numbered,
   canStar,
-  unavailable,
+  unplayable,
   onPlay,
   onSelect,
   onMenu,
@@ -272,8 +287,8 @@ const TrackRow = memo(function TrackRow({
   showCover: boolean
   numbered: boolean
   canStar: boolean
-  /** Offline with no copy of the song on this device: shown greyed out, and it does not start. */
-  unavailable: boolean
+  /** Shown greyed out, and it does not start. */
+  unplayable: Unplayable
   onPlay: (index: number) => void
   onSelect: (e: React.MouseEvent, index: number) => void
   onMenu: (e: React.MouseEvent, index: number) => void
@@ -285,22 +300,22 @@ const TrackRow = memo(function TrackRow({
       onClick={(e) => !(e.target as Element).closest('button, a') && onSelect(e, i)}
       // Shift-clicking a range would otherwise also select the text across it.
       onMouseDown={(e) => e.shiftKey && e.preventDefault()}
-      onDoubleClick={() => !unavailable && onPlay(i)}
+      onDoubleClick={() => !unplayable && onPlay(i)}
       onContextMenu={(e) => onMenu(e, i)}
       data-selected={selected || undefined}
-      title={unavailable ? 'Not on this device; plays once Lyria can reach your server' : undefined}
+      title={unplayable ? UNPLAYABLE_HINT[unplayable] : undefined}
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 56px' }}
       className={`group grid grid-cols-[40px_1fr_auto] items-center gap-3 rounded-md px-3 py-1.5 md:grid-cols-[40px_1fr_1fr_110px_60px] ${
         selected ? 'bg-white/[0.12]' : 'hover:bg-white/[0.06]'
       } ${
         isCurrent ? 'text-accent' : ''
-      } ${unavailable ? 'opacity-40' : ''}`}
+      } ${unplayable ? 'opacity-40' : ''}`}
     >
       <div className="flex items-center justify-center text-ink-3">
-        <span className={unavailable ? '' : 'group-hover:hidden'}>
+        <span className={unplayable ? '' : 'group-hover:hidden'}>
           {isCurrent && playing ? <Volume2 size={14} className="text-accent" /> : numbered ? (t.track ?? i + 1) : i + 1}
         </span>
-        {!unavailable && (
+        {!unplayable && (
           <button className="hidden text-ink group-hover:block" onClick={() => onPlay(i)} title="Play">
             <Play size={14} fill="currentColor" />
           </button>
@@ -309,8 +324,9 @@ const TrackRow = memo(function TrackRow({
       <div className="flex min-w-0 items-center gap-3">
         {showCover && <Cover id={t.coverArt} size={80} className="h-10 w-10" />}
         <div className="min-w-0">
-          <div className={`truncate font-medium ${isCurrent ? 'text-accent' : 'text-ink'}`} title={t.title}>
-            {t.title}
+          <div className={`flex items-center gap-1.5 font-medium ${isCurrent ? 'text-accent' : 'text-ink'}`} title={t.title}>
+            {unplayable === 'blocked' && <Ban size={12} className="shrink-0 text-ink-2" />}
+            <span className="truncate">{t.title}</span>
           </div>
           <div className="truncate text-xs text-ink-2" title={t.artist}>
             <ArtistLinks track={t} />
@@ -374,7 +390,7 @@ export function TrackMenu({
   pos: { x: number; y: number }
   track: Track
   starred: boolean
-  /** Offline with no copy of the song on this device, so there is nothing to play or queue. */
+  /** Offline with no copy of the song on this device, or on the don't-play list: nothing to play or queue. */
   unavailable?: boolean
   onClose: () => void
   onPlay: () => void
@@ -389,6 +405,12 @@ export function TrackMenu({
   const [pick, setPick] = useState<'playlist' | 'artist' | null>(null)
   const picking = pick === 'playlist'
   const credits = creditsOf(track)
+  const blocked = useSettings().blocked
+  const lead = credits[0]
+  const songBlocked = blocked.songs.some((s) => s.id === track.id)
+  const leadBlocked = lead !== undefined && blocked.artists.some((a) => a.id === lead.id)
+  const block = (list: keyof Blocked, entry: BlockedEntry, on: boolean) => () =>
+    void window.lyria.settings.update({ blocked: withBlock(blocked, list, entry, on) })
 
   const run = (fn: () => void) => () => {
     fn()
@@ -437,6 +459,21 @@ export function TrackMenu({
           >
             {starred ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
           </MenuItem>
+          <MenuSeparator />
+          <MenuItem
+            icon={songBlocked ? <CircleCheck size={14} /> : <Ban size={14} />}
+            onClick={run(block('songs', songEntry(track), !songBlocked))}
+          >
+            {songBlocked ? 'Unblock this song' : "Don't play this song"}
+          </MenuItem>
+          {lead && (
+            <MenuItem
+              icon={leadBlocked ? <CircleCheck size={14} /> : <Ban size={14} />}
+              onClick={run(block('artists', { id: lead.id, name: lead.name }, !leadBlocked))}
+            >
+              {leadBlocked ? 'Unblock this artist' : "Don't play this artist"}
+            </MenuItem>
+          )}
           {(track.albumId || credits.length > 0) && <MenuSeparator />}
           {track.albumId && (
             <MenuItem icon={<Disc3 size={14} />} onClick={run(() => nav.go({ name: 'album', id: track.albumId! }))}>
@@ -480,7 +517,7 @@ function SelectionMenu({
 }: {
   pos: MenuPos
   tracks: Track[]
-  /** The ones there is something to play for: offline, only those on this device. */
+  /** The ones there is something to play for: none on the don't-play list, and offline only those on this device. */
   playable: Track[]
   /** Whether every one of them is already liked. */
   starred: boolean
@@ -493,6 +530,12 @@ function SelectionMenu({
   const offline = useOffline()
   const [picking, setPicking] = useState(false)
   const none = playable.length === 0
+  const blocked = useSettings().blocked
+  const allBlocked = tracks.every((t) => blocked.songs.some((s) => s.id === t.id))
+  const blockAll = (): void => {
+    const next = tracks.reduce((b, t) => withBlock(b, 'songs', songEntry(t), !allBlocked), blocked)
+    void window.lyria.settings.update({ blocked: next })
+  }
 
   const run = (fn: () => void) => () => {
     fn()
@@ -525,6 +568,10 @@ function SelectionMenu({
             disabled={!client || offline}
           >
             {starred ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem icon={allBlocked ? <CircleCheck size={14} /> : <Ban size={14} />} onClick={run(blockAll)}>
+            {allBlocked ? 'Unblock these songs' : "Don't play these songs"}
           </MenuItem>
           {onRemove && (
             <>

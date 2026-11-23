@@ -31,6 +31,43 @@ export interface Track {
   gain?: { track?: number; album?: number; trackPeak?: number; albumPeak?: number; fallback?: number }
 }
 
+/** A song or artist on the don't-play list, named so Settings can list it with no server. */
+export interface BlockedEntry {
+  id: string
+  /** The song's title, or the artist's name. */
+  name: string
+  /** A song's artist. */
+  by?: string
+}
+
+/**
+ * Songs and artists never to play: every queue skips them, and mixes, radios and autoplay leave
+ * them out. Matched by id.
+ */
+export interface Blocked {
+  songs: BlockedEntry[]
+  artists: BlockedEntry[]
+}
+
+export const NO_BLOCKS: Blocked = { songs: [], artists: [] }
+
+/** Whether `t` is blocked, itself or through any artist credited on it. */
+export function isBlocked(b: Blocked, t: Track): boolean {
+  if (b.songs.some((s) => s.id === t.id)) return true
+  return b.artists.some((a) => a.id === t.artistId || t.artists?.some((c) => c.id === a.id))
+}
+
+/** `tracks` less the blocked ones. Every generated list goes through this on its way out. */
+export function unblocked(tracks: Track[], b: Blocked): Track[] {
+  return tracks.filter((t) => !isBlocked(b, t))
+}
+
+/** `b` with `entry` put on its `list`, or taken off it. */
+export function withBlock(b: Blocked, list: keyof Blocked, entry: BlockedEntry, on: boolean): Blocked {
+  const rest = b[list].filter((e) => e.id !== entry.id)
+  return { ...b, [list]: on ? [entry, ...rest] : rest }
+}
+
 export type NormalizeMode = 'off' | 'track' | 'album'
 
 export type ThemeName = 'blue' | 'green'
@@ -591,6 +628,7 @@ export interface Settings {
   normalize: NormalizeMode
   /** Keep playing songs like the last few heard once the queue runs out. */
   autoplay: boolean
+  blocked: Blocked
   toastDurationMs: number
   windowBounds: Partial<Record<WindowName, Rect>>
   /** Queue and playback position saved on quit so the next launch picks up where it left off. */
@@ -633,6 +671,7 @@ export const defaultSettings: Settings = {
   mediaKeys: true,
   normalize: 'album',
   autoplay: true,
+  blocked: NO_BLOCKS,
   toastDurationMs: 3500,
   windowBounds: {},
   resume: null,

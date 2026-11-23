@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { SubsonicClient } from '../src/shared/subsonic/client'
-import type { PlayerCommandName, PlayerCommands, PlayerEvents, Track } from '../src/shared/types'
+import { NO_BLOCKS, type PlayerCommandName, type PlayerCommands, type PlayerEvents, type Track } from '../src/shared/types'
 
 /** Just enough of an <audio> element for the engine: it plays at once and ends when told to. */
 class FakeAudio extends EventTarget {
@@ -249,7 +249,7 @@ describe('autoplay', () => {
   test("a queue restored at launch keeps autoplay's songs apart from yours", () => {
     const { send, queue } = start()
     const resume = { queue: ['s1', 's2', 'a', 'b'].map(song), index: 0, position: 0, autoplayFrom: 2 }
-    engine.restore({ volume: 1, muted: false, repeat: 'off', shuffle: false, normalize: 'off', autoplay: true, resume })
+    engine.restore({ volume: 1, muted: false, repeat: 'off', shuffle: false, normalize: 'off', autoplay: true, blocked: NO_BLOCKS, resume })
     expect(queue()).toBe('s1 s2 | a b')
     send('addToQueue', { tracks: [song('c')] })
     expect(queue()).toBe('s1 s2 c | a b')
@@ -274,5 +274,52 @@ describe('song radio', () => {
     const [first, ...rest] = queue().split(' ')
     expect(first).toBe('s1')
     expect(rest.sort()).toEqual(['a', 'b'])
+  })
+})
+
+describe("the don't-play list", () => {
+  const blockSongs = (...ids: string[]) => engine.setBlocked({ songs: ids.map((id) => ({ id, name: id })), artists: [] })
+
+  test('Next, a song ending and Previous all step over blocked songs, in any queue', () => {
+    const { send } = start()
+    engine.setAutoplay(false)
+    blockSongs('s2', 's3')
+    send('setQueue', { tracks: ['s1', 's2', 's3', 's4'].map(song) })
+    send('next', undefined)
+    expect(audio.src).toBe('stream:s4')
+    send('prev', undefined)
+    expect(audio.src).toBe('stream:s1')
+    audio.finish()
+    expect(audio.src).toBe('stream:s4')
+  })
+
+  test('an artist on the list is skipped whether they lead the song or feature on it', () => {
+    const { send } = start()
+    engine.setAutoplay(false)
+    engine.setBlocked({ songs: [], artists: [{ id: 'ash', name: 'Ash' }] })
+    const lead = { ...song('s2'), artistId: 'ash' }
+    const featured = { ...song('s3'), artists: [{ id: 'kite', name: 'Kite' }, { id: 'ash', name: 'Ash' }] }
+    send('setQueue', { tracks: [song('s1'), lead, featured, song('s4')] })
+    send('next', undefined)
+    expect(audio.src).toBe('stream:s4')
+  })
+
+  test('a queue started on a blocked song starts on the next one', () => {
+    const { send } = start()
+    engine.setAutoplay(false)
+    blockSongs('s1')
+    send('setQueue', { tracks: ['s1', 's2'].map(song) })
+    expect(audio.src).toBe('stream:s2')
+  })
+
+  test('autoplay starts once only blocked songs are left, adds none of its own, and plays on past them', async () => {
+    const { asked, send, queue } = start(async () => [song('a'), song('b')])
+    blockSongs('s2', 'b')
+    send('setQueue', { tracks: ['s1', 's2'].map(song) })
+    await settle()
+    expect(asked).toEqual(['s1'])
+    expect(queue()).toBe('s1 s2 | a')
+    audio.finish()
+    expect(audio.src).toBe('stream:a')
   })
 })
