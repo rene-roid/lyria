@@ -131,6 +131,7 @@ export function TrackList({
     mark(next)
     try {
       await (next ? client.star(ids) : client.unstar(ids))
+      for (const id of ids) player.setStarred(id, next)
     } catch {
       mark(!next)
     }
