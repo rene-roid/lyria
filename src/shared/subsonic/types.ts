@@ -132,6 +132,14 @@ export interface RandomSongsResponse {
   randomSongs: { song?: Child[] }
 }
 
+export interface SimilarSongs2Response {
+  similarSongs2: { song?: Child[] }
+}
+
+export interface TopSongsResponse {
+  topSongs: { song?: Child[] }
+}
+
 export interface Starred2Response {
   starred2: { artist?: ArtistID3[]; album?: AlbumID3[]; song?: Child[] }
 }

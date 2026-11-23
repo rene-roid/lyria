@@ -19,10 +19,12 @@ import type {
   PlaylistsResponse,
   RandomSongsResponse,
   Search3Response,
+  SimilarSongs2Response,
   SongsByGenreResponse,
   Starred2Response,
   StructuredLyrics,
-  SubsonicEnvelope
+  SubsonicEnvelope,
+  TopSongsResponse
 } from './types'
 
 export const API_VERSION = '1.16.1'
@@ -235,6 +237,21 @@ export class SubsonicClient {
   async getRandomSongs(size = 50): Promise<Track[]> {
     const r = await this.call<RandomSongsResponse>('getRandomSongs', { size })
     return (r.randomSongs.song ?? []).map(childToTrack)
+  }
+
+  /**
+   * Songs by artists similar to the song's, from the server's agent (Last.fm and the like).
+   * Navidrome answers with an empty list when no agent is set up.
+   */
+  async getSimilarSongs2(id: string, count = 50): Promise<Track[]> {
+    const r = await this.call<SimilarSongs2Response>('getSimilarSongs2', { id, count })
+    return (r.similarSongs2.song ?? []).map(childToTrack)
+  }
+
+  /** An artist's most popular songs, by name. Empty, like getSimilarSongs2, without an agent. */
+  async getTopSongs(artist: string, count = 50): Promise<Track[]> {
+    const r = await this.call<TopSongsResponse>('getTopSongs', { artist, count })
+    return (r.topSongs.song ?? []).map(childToTrack)
   }
 
   async getGenres(): Promise<Genre[]> {
