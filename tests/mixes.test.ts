@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { SubsonicClient } from '../src/shared/subsonic/client'
-import { buildMix, mixSeeds, seedOfView } from '../src/renderer/main/mixes'
-import { saveMix, type SavedMix, type Session, type Track } from '../src/shared/types'
+import { buildMix, mixSeeds, seedOfView, type MixSources } from '../src/renderer/main/mixes'
+import { saveMix, type Blocked, type SavedMix, type Session, type Track } from '../src/shared/types'
 
 const session: Session = { server: 'http://s', username: 'u', token: 't', salt: 's' }
 
@@ -17,6 +17,7 @@ const song = (id: string, artist: string, genre?: string): Record<string, unknow
   id,
   title: `Song ${id}`,
   artist,
+  artistId: `id of ${artist}`,
   genre,
   duration: 100
 })
@@ -162,6 +163,37 @@ describe('artist mixes', () => {
       async () => new Response(JSON.stringify({ 'subsonic-response': { status: 'ok', searchResult3: {} } }))
     )
     expect(await buildMix(empty, { kind: 'artist', value: 'Ghost' })).toEqual([])
+  })
+})
+
+describe("the don't-play list", () => {
+  const blocking = (blocked: Blocked): MixSources => ({
+    albums: (c) => c.getAllAlbums(),
+    history: async () => ({}),
+    blocked: () => blocked
+  })
+
+  test('keeps blocked songs and artists out of every kind of mix', async () => {
+    const rock = await buildMix(client, { kind: 'genre', value: 'rock' })
+    const song = rock.find((t) => t.artist !== 'Artist 1')!
+    const blocked = { songs: [{ id: song.id, name: song.title }], artists: [{ id: 'id of Artist 1', name: 'Artist 1' }] }
+    const without = await buildMix(client, { kind: 'genre', value: 'rock' }, blocking(blocked))
+    expect(ids(without)).toEqual(ids(rock.filter((t) => t.id !== song.id && t.artist !== 'Artist 1')))
+    expect(without.length).toBe(3)
+
+    const nova = { songs: [], artists: [{ id: 'id of Nova', name: 'Nova' }] }
+    const artistMix = await buildMix(client, { kind: 'artist', value: 'Nova' }, blocking(nova))
+    expect(artistMix.length).toBe(42)
+    expect(artistMix.some((t) => t.artist === 'Nova')).toBe(false)
+  })
+
+  test("a lineup built before the block loses the song, and gets it back once it's unblocked", async () => {
+    const chill = { kind: 'mood', value: 'chill' } as const
+    const before = await buildMix(client, chill)
+    const song = before[3]
+    const blocked = blocking({ songs: [{ id: song.id, name: song.title }], artists: [] })
+    expect(ids(await buildMix(client, chill, blocked))).toEqual(ids(before.filter((t) => t.id !== song.id)))
+    expect(ids(await buildMix(client, chill))).toEqual(ids(before))
   })
 })
 

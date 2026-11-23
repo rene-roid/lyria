@@ -10,29 +10,39 @@
  */
 import type { SubsonicClient } from '@shared/subsonic/client'
 import type { AlbumID3 } from '@shared/subsonic/types'
-import { DISCOVERY_KINDS, type MixKind, type Track, type View } from '@shared/types'
+import { DISCOVERY_KINDS, NO_BLOCKS, unblocked, type Blocked, type MixKind, type Track, type View } from '@shared/types'
 import { mapLimit } from '@shared/async'
 import { capitalize, hasMood } from '@shared/format'
 import { paletteColor } from '@shared/navimix'
 import { localAlbums, mergeTaste, withLocalPlays, type PlayHistory } from '@shared/playHistory'
 import { interleave, sameArtist, shuffle, spread, tally } from '@shared/shuffle'
 import { cacheRead, cacheWrite } from '@renderer/shared/cache'
+import { useSessionStore } from '@renderer/shared/sessionStore'
 import { allAlbums } from './albumList'
 
 /**
- * Where the whole album list and this device's play history come from. Injected rather than
- * imported, so this module stays a plain function of a client -- the renderer hands in its cached
- * album list and main's history, and the unit tests hand in nothing and get the straight server
- * walk and no history of their own.
+ * Where the whole album list, this device's play history and the don't-play list come from.
+ * Injected rather than imported, so this module stays a plain function of a client -- the renderer
+ * hands in its cached album list, main's history and the settings' list, and the unit tests hand in
+ * nothing and get the straight server walk, no history of their own and nothing blocked.
  */
 export type AlbumSource = (client: SubsonicClient) => Promise<AlbumID3[]>
 export interface MixSources {
   albums: AlbumSource
   history: () => Promise<PlayHistory>
+  blocked: () => Blocked
 }
-const serverOnly: MixSources = { albums: (client) => client.getAllAlbums(), history: async () => ({}) }
-/** The app's: the album list it keeps, and the plays main has recorded on this device. */
-export const librarySources: MixSources = { albums: allAlbums, history: () => window.lyria.history.get() }
+const serverOnly: MixSources = {
+  albums: (client) => client.getAllAlbums(),
+  history: async () => ({}),
+  blocked: () => NO_BLOCKS
+}
+/** The app's: the album list it keeps, the plays main has recorded on this device, and the don't-play list. */
+export const librarySources: MixSources = {
+  albums: allAlbums,
+  history: () => window.lyria.history.get(),
+  blocked: () => useSessionStore.getState().settings.blocked
+}
 
 /** What one mix is built around. `value` is the tag text or the artist's name, and empty for a discovery mix. */
 export interface MixSeed {
@@ -342,17 +352,23 @@ interface Lineup {
   tracks: Track[]
 }
 
-export function buildMix(client: SubsonicClient, seed: MixSeed, sources: MixSources = serverOnly): Promise<Track[]> {
+/**
+ * Today's mix for `seed`, less whatever is on the don't-play list now. The list is applied on the
+ * way out rather than to the lineup kept for the day, so neither the memo nor the copy on disk can
+ * bring a blocked song back, and unblocking one brings it straight back.
+ */
+export async function buildMix(client: SubsonicClient, seed: MixSeed, sources: MixSources = serverOnly): Promise<Track[]> {
   const day = daySeed(seed)
   // Apart from `mixKey`'s copy, which the pages keep whatever day it is from to paint at once and to play offline.
   const key = `today:${mixKey(seed)}`
-  return once(client, `mix:${day}`, async () => {
+  const lineup = await once(client, `mix:${day}`, async () => {
     const kept = cacheRead<Lineup>(key)
     if (kept?.day === day) return kept.tracks
     const tracks = await MIXES[seed.kind].build(client, seed.value, day, sources)
     cacheWrite(key, { day, tracks } satisfies Lineup)
     return tracks
   })
+  return unblocked(lineup, sources.blocked())
 }
 
 /** The discovery mixes that have songs today. One the history or the library cannot fill yet is left out. */
