@@ -14,7 +14,7 @@ import type {
   ToastOptions,
   WidgetOptions
 } from '@shared/types'
-import { HOME_ANCHOR, OVERLAY_ANCHORS, OVERLAY_BACKGROUNDS, THEMES } from '@shared/types'
+import { CARD_SIZES, HOME_ANCHOR, OVERLAY_ANCHORS, OVERLAY_BACKGROUNDS, THEMES } from '@shared/types'
 import type { ServerProbe } from '@shared/subsonic/client'
 import { clearCache } from '@renderer/shared/cache'
 import { Cover } from '@renderer/shared/Cover'
@@ -364,33 +364,59 @@ function AnchorPicker({
   )
 }
 
-/** Card fill: an opaque panel, or the system's frosted glass. */
-function BackgroundPicker({ value, onChange }: { value: OverlayBackground; onChange: (v: OverlayBackground) => void }) {
-  const chosen = OVERLAY_BACKGROUNDS.find((b) => b.value === value)
-  const degraded = value === 'acrylic' && !window.lyria.nativeAcrylic
+/** One of a few named options, as a segmented control. */
+function Choice<T extends string>({
+  label,
+  description,
+  options,
+  value,
+  onChange
+}: {
+  label: string
+  description?: string
+  options: { value: T; label: string }[]
+  value: T
+  onChange: (v: T) => void
+}) {
   return (
     <div className="flex items-center justify-between gap-6 rounded-md px-3 py-3">
       <div>
-        <div className="text-sm font-medium">Background</div>
-        <div className="text-xs text-ink-2">
-          {degraded ? 'Windows 11 blurs what is behind the window; here it falls back to a plain translucent card' : chosen?.hint}
-        </div>
+        <div className="text-sm font-medium">{label}</div>
+        {description && <div className="text-xs text-ink-2">{description}</div>}
       </div>
       <div className="flex shrink-0 rounded-md border border-white/10 p-0.5">
-        {OVERLAY_BACKGROUNDS.map((b) => (
+        {options.map((o) => (
           <button
-            key={b.value}
-            aria-pressed={b.value === value}
-            onClick={() => onChange(b.value)}
+            key={o.value}
+            aria-pressed={o.value === value}
+            onClick={() => onChange(o.value)}
             className={`rounded px-2.5 py-1 text-xs transition ${
-              b.value === value ? 'bg-accent font-semibold text-black' : 'text-ink-2 hover:text-ink'
+              o.value === value ? 'bg-accent font-semibold text-black' : 'text-ink-2 hover:text-ink'
             }`}
           >
-            {b.label}
+            {o.label}
           </button>
         ))}
       </div>
     </div>
+  )
+}
+
+/** Card fill: an opaque panel, or the system's frosted glass. */
+function BackgroundPicker({ value, onChange }: { value: OverlayBackground; onChange: (v: OverlayBackground) => void }) {
+  const degraded = value === 'acrylic' && !window.lyria.nativeAcrylic
+  return (
+    <Choice
+      label="Background"
+      description={
+        degraded
+          ? 'Windows 11 blurs what is behind the window; here it falls back to a plain translucent card'
+          : OVERLAY_BACKGROUNDS.find((b) => b.value === value)?.hint
+      }
+      options={OVERLAY_BACKGROUNDS}
+      value={value}
+      onChange={onChange}
+    />
   )
 }
 
@@ -443,11 +469,18 @@ function TaskbarWidgetSettings({ value, onChange }: { value: WidgetOptions; onCh
           )
         }
       />
-      <Toggle
-        label="Compact view"
-        description="A shorter bar with just the title, for when it should stay out of the way"
-        checked={value.compact}
-        onChange={(compact) => onChange({ compact })}
+      <Choice
+        label="Size"
+        description={
+          value.size === 'small'
+            ? 'A slim bar with just the title, for when it should stay out of the way'
+            : value.size === 'medium'
+              ? 'Title and artist next to the controls'
+              : 'A bigger cover, the album too, and a seek bar you can click'
+        }
+        options={CARD_SIZES}
+        value={value.size}
+        onChange={(size) => onChange({ size })}
       />
       <Toggle
         label="Audio visualiser"
@@ -540,6 +573,19 @@ function MiniPlayerSettings({ value, onChange }: { value: MiniOptions; onChange:
   return (
     <section className="mb-8">
       <SectionHeader title="Mini player" />
+      <Choice
+        label="Size"
+        description={
+          value.size === 'small'
+            ? 'Title, artist and controls, with progress along the bottom edge'
+            : value.size === 'medium'
+              ? 'Controls and a seek bar'
+              : 'A bigger cover, the album line and full-size buttons'
+        }
+        options={CARD_SIZES}
+        value={value.size}
+        onChange={(size) => onChange({ size })}
+      />
       <ChromeSettings
         value={value}
         onChange={onChange}

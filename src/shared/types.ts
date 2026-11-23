@@ -385,11 +385,22 @@ export type WidgetPlacement = { kind: 'anchor'; anchor: OverlayAnchor } | { kind
 /** Where the widget starts, and where it goes back to when its position is reset. */
 export const HOME_ANCHOR: OverlayAnchor = 'bottom-right'
 
+/**
+ * How big a floating player is drawn. Small drops to the title alone (the widget) or the bare
+ * controls (the mini player); large adds the album line, a bigger cover and a seek bar.
+ */
+export type CardSize = 'small' | 'medium' | 'large'
+
+export const CARD_SIZES: { value: CardSize; label: string }[] = [
+  { value: 'small', label: 'Small' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'large', label: 'Large' }
+]
+
 /** Layout and chrome of the taskbar widget. Main sizes and places the window from these. */
 export interface WidgetOptions extends OverlayChrome {
   placement: WidgetPlacement
-  /** Shorter bar with the artist line dropped. */
-  compact: boolean
+  size: CardSize
   visualizer: boolean
   /** Thin accent progress line along the bottom edge. */
   progress: boolean
@@ -401,17 +412,19 @@ export interface WidgetOptions extends OverlayChrome {
 export const defaultWidgetOptions: WidgetOptions = {
   ...defaultOverlayChrome,
   placement: { kind: 'anchor', anchor: HOME_ANCHOR },
-  compact: false,
+  size: 'medium',
   visualizer: true,
   progress: true,
   cover: true,
   elapsed: false
 }
 
-/** The mini player has no layout options of its own; its position lives in `windowBounds`. */
-export type MiniOptions = OverlayChrome
+/** The mini player's options. Its position lives in `windowBounds`, wherever it was dragged. */
+export interface MiniOptions extends OverlayChrome {
+  size: CardSize
+}
 
-export const defaultMiniOptions: MiniOptions = defaultOverlayChrome
+export const defaultMiniOptions: MiniOptions = { ...defaultOverlayChrome, size: 'medium' }
 
 /** Track-change toast. It never takes the mouse, so only the card's look and its corner apply. */
 export interface ToastOptions extends Pick<OverlayChrome, 'background' | 'opacity'> {
@@ -425,14 +438,36 @@ export const defaultToastOptions: ToastOptions = {
 }
 
 /**
+ * The taskbar widget per size: the window's box with every part shown, the cover and the flex
+ * gap that goes with it, and the elapsed time next to the controls. Large shows the time beside
+ * its seek bar instead, inside the box it already has.
+ */
+export const WIDGET_LAYOUTS: Record<CardSize, { width: number; height: number; cover: number; gap: number; elapsed: number }> = {
+  small: { width: 288, height: 52, cover: 36, gap: 8, elapsed: 72 },
+  medium: { width: 340, height: 76, cover: 54, gap: 10, elapsed: 74 },
+  large: { width: 420, height: 108, cover: 84, gap: 12, elapsed: 0 }
+}
+
+/**
  * Footprint of the taskbar widget for a given set of options. Lives here so the main process
- * can size the window and the renderer can lay out to exactly the same box. The deltas are the
- * content widths in `widget/main.tsx`, each with the flex gap that goes away with it.
+ * can size the window and the renderer can lay out to exactly the same box.
  */
 export function widgetSize(o: WidgetOptions): { width: number; height: number } {
-  const c = o.compact
-  const width = (c ? 288 : 340) - (o.cover ? 0 : c ? 44 : 64) + (o.elapsed ? (c ? 72 : 74) : 0)
-  return { width, height: c ? 52 : 76 }
+  const l = WIDGET_LAYOUTS[o.size]
+  const width = l.width - (o.cover ? 0 : l.cover + l.gap) + (o.elapsed ? l.elapsed : 0)
+  return { width, height: l.height }
+}
+
+/** The mini player per size: its window's box and the side of its cover. */
+export const MINI_LAYOUTS: Record<CardSize, { width: number; height: number; cover: number }> = {
+  small: { width: 300, height: 84, cover: 64 },
+  medium: { width: 340, height: 112, cover: 84 },
+  large: { width: 384, height: 148, cover: 124 }
+}
+
+export function miniSize(o: MiniOptions): { width: number; height: number } {
+  const { width, height } = MINI_LAYOUTS[o.size]
+  return { width, height }
 }
 
 export interface Settings {

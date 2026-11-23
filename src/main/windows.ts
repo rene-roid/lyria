@@ -6,6 +6,7 @@ import { is } from '@electron-toolkit/utils'
 import {
   OVERLAY_FADE_MS,
   defaultOverlayChrome,
+  miniSize,
   overlayOpacity,
   supportsNativeAcrylic,
   widgetSize,
@@ -15,12 +16,11 @@ import {
   type WidgetPlacement,
   type WindowName
 } from '@shared/types'
-import { anchoredRect, dropPlacement, onScreen, placeWidget, snapAnchor } from '@shared/placement'
+import { anchoredRect, clampInto, dropPlacement, onScreen, placeWidget, snapAnchor } from '@shared/placement'
 import { getSettings, updateSettings } from './store'
 
 const windows = new Map<WindowName, BrowserWindow>()
 
-export const MINI_SIZE = { width: 340, height: 112 }
 export const TOAST_SIZE = { width: 380, height: 112 }
 const EDGE = 12
 
@@ -261,10 +261,11 @@ export function createMiniWindow(): BrowserWindow {
   if (existing) return existing
   const saved = savedBounds('mini')
   const a = workArea()
+  const size = miniSize(getSettings().mini)
   const win = new BrowserWindow({
     ...baseOptions('mini'),
-    ...MINI_SIZE,
-    x: saved?.x ?? a.x + a.width - MINI_SIZE.width - EDGE,
+    ...size,
+    x: saved?.x ?? a.x + a.width - size.width - EDGE,
     y: saved?.y ?? a.y + EDGE,
     ...surfaceOptions('mini'),
     frame: false,
@@ -492,15 +493,30 @@ export function widgetBounds(): Rect {
   return placeWidget(o.placement, widgetSize(o), workArea(), workAreas())
 }
 
+/**
+ * Windows pins maximumSize to the current size while a window is non-resizable, so a size
+ * change is rejected unless resizing is briefly allowed.
+ */
+function setFixedBounds(win: BrowserWindow, r: Rect): void {
+  win.setResizable(true)
+  win.setBounds(r)
+  win.setResizable(false)
+}
+
 /** Re-anchor and re-size the taskbar widget after a settings change or a display change. */
 export function positionWidget(): void {
   const win = getWindow('widget')
+  if (win) setFixedBounds(win, widgetBounds())
+}
+
+/** Re-size the mini player to its size option, keeping its corner where it was if that fits. */
+export function resizeMini(): void {
+  const win = getWindow('mini')
   if (!win) return
-  // Windows pins maximumSize to the current size while a window is non-resizable, so a
-  // compact-mode size change is rejected unless resizing is briefly allowed.
-  win.setResizable(true)
-  win.setBounds(widgetBounds())
-  win.setResizable(false)
+  const b = win.getBounds()
+  const size = miniSize(getSettings().mini)
+  if (b.width === size.width && b.height === size.height) return
+  setFixedBounds(win, clampInto({ ...b, ...size }, screen.getDisplayMatching(b).workArea))
 }
 
 /** The slot the widget would snap into if let go of now; the page outlines itself while there is one. */

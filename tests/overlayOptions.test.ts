@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { sanitizeWidget } from '../src/main/overlayOptions'
+import { sanitizeMini, sanitizeWidget } from '../src/main/overlayOptions'
 import { defaultWidgetOptions } from '../src/shared/types'
 
 /** The widget block exactly as v0.6.0 wrote it. */
@@ -21,6 +21,25 @@ test('a v0.6.0 anchor becomes an anchored placement, and the old key is dropped'
   const o = sanitizeWidget(v060 as never)
   expect(o.placement).toEqual({ kind: 'anchor', anchor: 'top-left' })
   expect('anchor' in o).toBe(false)
+})
+
+test('a v0.6.0 compact widget becomes the small size, and the old key is dropped', () => {
+  const o = sanitizeWidget(v060 as never)
+  expect(o.size).toBe('small')
+  expect('compact' in o).toBe(false)
+  expect(sanitizeWidget({ ...v060, compact: false } as never).size).toBe('medium')
+})
+
+test('a stored size wins over a leftover compact switch, and an unknown one falls back', () => {
+  expect(sanitizeWidget({ ...v060, size: 'large' } as never).size).toBe('large')
+  expect(sanitizeWidget({ size: 'huge' } as never).size).toBe('medium')
+})
+
+test('a v0.6.0 mini player block gets the medium size it always had', () => {
+  const o = sanitizeMini({ background: 'solid', opacity: 0.9, fadeOnHover: false, hoverOpacity: 0.35, clickThrough: true })
+  expect(o.size).toBe('medium')
+  expect(o.opacity).toBe(0.9)
+  expect(o.clickThrough).toBe(true)
 })
 
 test('the rest of a v0.6.0 widget block carries over', () => {

@@ -37,6 +37,7 @@ import {
   getWindow,
   positionToast,
   positionWidget,
+  resizeMini,
   setWidgetEnabled,
   settleWidget,
   showMainWindow,
@@ -231,7 +232,10 @@ export function setupIpc(): void {
       positionWidget()
       positionToast()
     }
-    if (patch.mini) applyOverlaySettings('mini')
+    if (patch.mini) {
+      applyOverlaySettings('mini')
+      resizeMini()
+    }
     if (patch.toast) {
       applyOverlaySettings('toast')
       positionToast()

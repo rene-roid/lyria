@@ -1,6 +1,7 @@
 import { Heart, Pause, Play, Shuffle, SkipBack, SkipForward } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Track } from '@shared/types'
+import { formatTime } from '@shared/format'
 import { player, usePlayerState } from './playerStore'
 import { useClient } from './sessionStore'
 
@@ -104,4 +105,50 @@ export function TransportControls({
 
 function TrackLike({ track, size, className }: { track: Track | null; size: number; className: string }) {
   return <LikeButton star={useStar(track)} size={size} className={className} />
+}
+
+/**
+ * How far into the track playback is, as a thin bar that jumps there when clicked. The hit area
+ * is taller than the bar so it can stay thin without being fiddly to click.
+ */
+export function SeekBar({ className = '' }: { className?: string }) {
+  const position = usePlayerState((s) => s.position)
+  const duration = usePlayerState((s) => s.duration)
+  const pct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0
+  return (
+    <div
+      className={`no-drag group flex h-3 cursor-pointer items-center ${className}`}
+      onClick={(e) => {
+        const r = e.currentTarget.getBoundingClientRect()
+        player.seek(((e.clientX - r.left) / r.width) * duration)
+      }}
+    >
+      <div className="h-1 w-full overflow-hidden rounded-full bg-white/15 transition-[height] duration-150 group-hover:h-1.5">
+        <div className="h-full rounded-full bg-accent transition-[width] duration-200" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
+
+/** The same progress as a hairline along the bottom edge of a card, for layouts with no room for a bar. */
+export function ProgressLine() {
+  const position = usePlayerState((s) => s.position)
+  const duration = usePlayerState((s) => s.duration)
+  const pct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-white/10">
+      <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${pct}%` }} />
+    </div>
+  )
+}
+
+/** `1:23 / 4:56` */
+export function Elapsed({ className = '' }: { className?: string }) {
+  const position = usePlayerState((s) => s.position)
+  const duration = usePlayerState((s) => s.duration)
+  return (
+    <span className={`shrink-0 tabular-nums text-ink-3 ${className}`}>
+      {formatTime(position)} / {formatTime(duration)}
+    </span>
+  )
 }

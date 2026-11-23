@@ -1,4 +1,5 @@
 import {
+  CARD_SIZES,
   OVERLAY_ANCHORS,
   OVERLAY_BACKGROUNDS,
   defaultMiniOptions,
@@ -16,6 +17,11 @@ const ANCHOR_SET = new Set<unknown>(OVERLAY_ANCHORS.map((a) => a.value))
 const BACKGROUND_SET = new Set<unknown>(OVERLAY_BACKGROUNDS.map((b) => b.value))
 
 const isAnchor = (v: unknown): v is OverlayAnchor => ANCHOR_SET.has(v)
+
+/** `v` when it is one of `options`, `fallback` otherwise. */
+function oneOf<T>(options: { value: T }[], v: unknown, fallback: T): T {
+  return options.some((o) => o.value === v) ? (v as T) : fallback
+}
 
 export const clamp = (n: number, lo: number, hi: number, fallback: number): number =>
   Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback
@@ -38,8 +44,11 @@ function sanitizeChrome(saved: Partial<OverlayChrome>, defaults: OverlayChrome):
 
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback)
 
-/** A widget block as any version stored it. v0.6.0 kept a bare `anchor` where `placement` is now. */
-export type StoredWidget = Partial<WidgetOptions> & { anchor?: unknown }
+/**
+ * A widget block as any version stored it. v0.6.0 kept a bare `anchor` where `placement` is
+ * now, and a `compact` switch where `size` is.
+ */
+export type StoredWidget = Partial<WidgetOptions> & { anchor?: unknown; compact?: unknown }
 
 function sanitizePlacement(p: unknown, legacyAnchor: unknown): WidgetPlacement {
   const v = (p ?? {}) as Record<string, unknown>
@@ -56,7 +65,7 @@ export function sanitizeWidget(saved: StoredWidget | undefined): WidgetOptions {
   return {
     ...sanitizeChrome(s, d),
     placement: sanitizePlacement(s.placement, s.anchor),
-    compact: bool(s.compact, d.compact),
+    size: oneOf(CARD_SIZES, s.size, s.compact === true ? 'small' : d.size),
     visualizer: bool(s.visualizer, d.visualizer),
     progress: bool(s.progress, d.progress),
     cover: bool(s.cover, d.cover),
@@ -65,7 +74,8 @@ export function sanitizeWidget(saved: StoredWidget | undefined): WidgetOptions {
 }
 
 export function sanitizeMini(saved: Partial<MiniOptions> | undefined): MiniOptions {
-  return sanitizeChrome(saved ?? {}, defaultMiniOptions)
+  const s = saved ?? {}
+  return { ...sanitizeChrome(s, defaultMiniOptions), size: oneOf(CARD_SIZES, s.size, defaultMiniOptions.size) }
 }
 
 export function sanitizeToast(saved: Partial<ToastOptions> | undefined): ToastOptions {
