@@ -5,16 +5,18 @@ import { useOverlayChrome } from '@renderer/shared/overlay'
 import { usePlayerState } from '@renderer/shared/playerStore'
 import { useSettings } from '@renderer/shared/sessionStore'
 import { formatTime } from '@shared/format'
+import { useWidgetDrag } from './drag'
 import { Visualizer } from './Visualizer'
 
 /**
  * Taskbar-area widget: a small card pinned to one edge of the work area, usually just above
- * the Windows taskbar. Main owns the window's size and position; everything here lays out to
- * fill whatever box it was given, from the same `settings.widget` options.
+ * the Windows taskbar, or wherever it was dragged. Main owns the window's size and position;
+ * everything here lays out to fill whatever box it was given, from the same `settings.widget`.
  */
 function TaskbarWidget() {
   const o = useSettings().widget
   const { card, style } = useOverlayChrome(o)
+  const drag = useWidgetDrag()
   const track = usePlayerState((s) => s.track)
   const position = usePlayerState((s) => s.position)
   const duration = usePlayerState((s) => s.duration)
@@ -27,6 +29,7 @@ function TaskbarWidget() {
         className={`${card} relative flex h-full w-full items-center overflow-hidden ${
           o.compact ? 'gap-2 px-2' : 'gap-2.5 px-2.5'
         }`}
+        onPointerDown={drag.onPointerDown}
       >
         {o.visualizer && (
           <Visualizer bars={40} className="pointer-events-none absolute inset-0 h-full w-full opacity-40" />
@@ -58,6 +61,7 @@ function TaskbarWidget() {
         <div className="relative shrink-0">
           <TransportControls compact size={o.compact ? 13 : 15} />
         </div>
+        {drag.snapping && <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-2 ring-accent ring-inset" />}
         {o.progress && (
           <div className="absolute inset-x-0 bottom-0 h-[2px] bg-white/10">
             <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${pct}%` }} />

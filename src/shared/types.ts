@@ -376,9 +376,18 @@ export function overlayOpacity(o: OverlayChrome, hovering: boolean): number {
   return o.fadeOnHover && hovering ? Math.min(o.opacity, o.hoverOpacity) : o.opacity
 }
 
+/**
+ * Where the taskbar widget sits: glued to one of the anchor slots of the primary work area, or
+ * wherever it was dragged to, as the top-left corner of the window in screen DIP.
+ */
+export type WidgetPlacement = { kind: 'anchor'; anchor: OverlayAnchor } | { kind: 'free'; x: number; y: number }
+
+/** Where the widget starts, and where it goes back to when its position is reset. */
+export const HOME_ANCHOR: OverlayAnchor = 'bottom-right'
+
 /** Layout and chrome of the taskbar widget. Main sizes and places the window from these. */
 export interface WidgetOptions extends OverlayChrome {
-  anchor: OverlayAnchor
+  placement: WidgetPlacement
   /** Shorter bar with the artist line dropped. */
   compact: boolean
   visualizer: boolean
@@ -391,7 +400,7 @@ export interface WidgetOptions extends OverlayChrome {
 
 export const defaultWidgetOptions: WidgetOptions = {
   ...defaultOverlayChrome,
-  anchor: 'bottom-right',
+  placement: { kind: 'anchor', anchor: HOME_ANCHOR },
   compact: false,
   visualizer: true,
   progress: true,

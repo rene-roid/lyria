@@ -5,6 +5,7 @@ import type {
   DownloadStatus,
   HostJob,
   NewDownload,
+  OverlayAnchor,
   PlayerCommandName,
   PlayerCommands,
   PlayerEventName,
@@ -219,6 +220,21 @@ const api = {
     hide: (): void => ipcRenderer.send('window:control', 'hide'),
     showMain: (): void => ipcRenderer.send('window:control', 'showMain'),
     setIgnoreMouse: (ignore: boolean): void => ipcRenderer.send('window:setIgnoreMouse', ignore)
+  },
+
+  /** The taskbar widget's drag: the page follows the pointer, main moves the window and snaps it. */
+  widget: {
+    /** Put the window's top-left corner here, in screen DIP. */
+    drag(x: number, y: number): void {
+      ipcRenderer.send('widget:drag', x, y)
+    },
+    drop(): void {
+      ipcRenderer.send('widget:drop')
+    },
+    /** The anchor slot a drop would snap into right now, or null. */
+    onSnap(cb: (anchor: OverlayAnchor | null) => void): Unsubscribe {
+      return subscribe('widget:snap', cb)
+    }
   },
 
   /** Floating windows only. Main watches the cursor and reports it to the window's page. */

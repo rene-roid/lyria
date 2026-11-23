@@ -14,7 +14,7 @@ import type {
   ToastOptions,
   WidgetOptions
 } from '@shared/types'
-import { OVERLAY_ANCHORS, OVERLAY_BACKGROUNDS, THEMES } from '@shared/types'
+import { HOME_ANCHOR, OVERLAY_ANCHORS, OVERLAY_BACKGROUNDS, THEMES } from '@shared/types'
 import type { ServerProbe } from '@shared/subsonic/client'
 import { clearCache } from '@renderer/shared/cache'
 import { Cover } from '@renderer/shared/Cover'
@@ -317,16 +317,29 @@ function Toggle({
 
 /**
  * The work area as a 3x2 grid of slots, each drawn as the little bar the window will become.
- * Reads faster than a dropdown, since the choice is about a place on screen.
+ * Reads faster than a dropdown, since the choice is about a place on screen. No slot is lit for
+ * a widget dragged somewhere of its own.
  */
-function AnchorPicker({ value, onChange }: { value: OverlayAnchor; onChange: (v: OverlayAnchor) => void }) {
+function AnchorPicker({
+  value,
+  onChange,
+  hint,
+  action
+}: {
+  value: OverlayAnchor | undefined
+  onChange: (v: OverlayAnchor) => void
+  hint?: string
+  action?: ReactNode
+}) {
   return (
     <div className="flex items-center justify-between gap-6 rounded-md px-3 py-3">
       <div>
         <div className="text-sm font-medium">Position</div>
         <div className="text-xs text-ink-2">
-          {OVERLAY_ANCHORS.find((a) => a.value === value)?.label} of the screen, clear of the taskbar.
+          {value ? `${OVERLAY_ANCHORS.find((a) => a.value === value)?.label} of the screen, clear of the taskbar.` : ''}
+          {hint ? ` ${hint}` : ''}
         </div>
+        {action}
       </div>
       <div className="grid h-[76px] w-[132px] shrink-0 grid-cols-3 grid-rows-2 gap-1 rounded-md border border-white/10 bg-black/40 p-1">
         {OVERLAY_ANCHORS.map((a) => {
@@ -411,10 +424,25 @@ function OpacitySlider({
 
 /** Everything about the taskbar widget except whether it is shown at all. */
 function TaskbarWidgetSettings({ value, onChange }: { value: WidgetOptions; onChange: (p: Partial<WidgetOptions>) => void }) {
+  const p = value.placement
   return (
     <section className="mb-8">
       <SectionHeader title="Taskbar widget" />
-      <AnchorPicker value={value.anchor} onChange={(anchor) => onChange({ anchor })} />
+      <AnchorPicker
+        value={p.kind === 'anchor' ? p.anchor : undefined}
+        hint={p.kind === 'free' ? 'Where you dropped it. Let go near a corner or edge to snap back into place.' : 'Drag the widget to move it anywhere.'}
+        onChange={(anchor) => onChange({ placement: { kind: 'anchor', anchor } })}
+        action={
+          !(p.kind === 'anchor' && p.anchor === HOME_ANCHOR) && (
+            <button
+              className="mt-1.5 text-xs font-semibold text-accent hover:underline"
+              onClick={() => onChange({ placement: { kind: 'anchor', anchor: HOME_ANCHOR } })}
+            >
+              Reset position
+            </button>
+          )
+        }
+      />
       <Toggle
         label="Compact view"
         description="A shorter bar with just the title, for when it should stay out of the way"

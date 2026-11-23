@@ -12,8 +12,10 @@ import {
   type OverlayAnchor,
   type OverlayChrome,
   type Rect,
+  type WidgetPlacement,
   type WindowName
 } from '@shared/types'
+import { anchoredRect, dropPlacement, onScreen, placeWidget, snapAnchor } from '@shared/placement'
 import { getSettings, updateSettings } from './store'
 
 const windows = new Map<WindowName, BrowserWindow>()
@@ -21,8 +23,6 @@ const windows = new Map<WindowName, BrowserWindow>()
 export const MINI_SIZE = { width: 340, height: 112 }
 export const TOAST_SIZE = { width: 380, height: 112 }
 const EDGE = 12
-/** The widget sits closer to the screen edge than the floating windows so it hugs the taskbar. */
-const WIDGET_EDGE = 6
 
 /** Windows/Linux: tool windows are skipped by the taskbar, alt-tab and window lists. */
 const OVERLAY_TYPE = process.platform === 'darwin' ? {} : ({ type: 'toolbar' } as const)
@@ -119,6 +119,10 @@ function workArea(): Rect {
   return screen.getPrimaryDisplay().workArea
 }
 
+function workAreas(): Rect[] {
+  return screen.getAllDisplays().map((d) => d.workArea)
+}
+
 function rememberBounds(name: WindowName, win: BrowserWindow): void {
   let timer: NodeJS.Timeout | undefined
   const save = (): void => {
@@ -134,13 +138,8 @@ function rememberBounds(name: WindowName, win: BrowserWindow): void {
 
 function savedBounds(name: WindowName): Rect | undefined {
   const b = getSettings().windowBounds[name]
-  if (!b) return undefined
-  // Make sure the window is at least partially on a connected display.
-  const onScreen = screen.getAllDisplays().some((d) => {
-    const a = d.workArea
-    return b.x < a.x + a.width - 40 && b.x + b.width > a.x + 40 && b.y < a.y + a.height - 40 && b.y + b.height > a.y + 40
-  })
-  return onScreen ? b : undefined
+  // Only while enough of it is still on a connected display to grab it.
+  return b && onScreen(b, workAreas()) ? b : undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -247,7 +246,7 @@ export function positionToast(): void {
   const win = getWindow('toast')
   if (!win) return
   const { anchor } = getSettings().toast
-  const r = anchoredRect(anchor, TOAST_SIZE, EDGE, EDGE)
+  const r = anchoredRect(anchor, TOAST_SIZE, workArea(), EDGE, EDGE)
   const widget = getWindow('widget')
   const w = widget?.isVisible() ? widgetBounds() : undefined
   // Step over the widget when the two would overlap, away from the edge the toast hangs off.
@@ -487,25 +486,10 @@ export function applyOverlaySettings(name: OverlayName): void {
 
 // ---- geometry ---------------------------------------------------------------
 
-/** A box of `size` glued to `anchor` of the work area, inset by `sideInset` / `edgeInset`. */
-function anchoredRect(anchor: OverlayAnchor, size: { width: number; height: number }, sideInset: number, edgeInset: number): Rect {
-  const a = workArea()
-  const { width, height } = size
-  const [edge, side] = anchor.split('-')
-  const x =
-    side === 'left'
-      ? a.x + sideInset
-      : side === 'center'
-        ? a.x + Math.round((a.width - width) / 2)
-        : a.x + a.width - width - sideInset
-  const y = edge === 'top' ? a.y + edgeInset : a.y + a.height - height - edgeInset
-  return { x, y, width, height }
-}
-
-/** Where the taskbar widget belongs right now, from its anchor and its layout options. */
+/** Where the taskbar widget belongs right now, from its placement and its layout options. */
 export function widgetBounds(): Rect {
   const o = getSettings().widget
-  return anchoredRect(o.anchor, widgetSize(o), EDGE, WIDGET_EDGE)
+  return placeWidget(o.placement, widgetSize(o), workArea(), workAreas())
 }
 
 /** Re-anchor and re-size the taskbar widget after a settings change or a display change. */
@@ -517,6 +501,55 @@ export function positionWidget(): void {
   win.setResizable(true)
   win.setBounds(widgetBounds())
   win.setResizable(false)
+}
+
+/** The slot the widget would snap into if let go of now; the page outlines itself while there is one. */
+let dragSnap: OverlayAnchor | null = null
+
+function showSnap(win: BrowserWindow, anchor: OverlayAnchor | null): void {
+  if (anchor === dragSnap) return
+  dragSnap = anchor
+  win.webContents.send('widget:snap', anchor)
+}
+
+/**
+ * Follow the page's pointer while the widget is dragged. The page does the pointer work, since
+ * it already captures the mouse for its own controls; `x`/`y` is where its top-left corner goes.
+ */
+export function dragWidget(x: number, y: number): void {
+  const win = getWindow('widget')
+  if (!win || !Number.isFinite(x) || !Number.isFinite(y)) return
+  const { width, height } = win.getBounds()
+  const r = { x: Math.round(x), y: Math.round(y), width, height }
+  win.setBounds(r)
+  showSnap(win, snapAnchor(r, workArea()) ?? null)
+}
+
+/** Let go of a drag: where the widget settles, which the caller saves as its placement. */
+export function dropWidget(): WidgetPlacement | undefined {
+  const win = getWindow('widget')
+  if (!win) return undefined
+  showSnap(win, null)
+  return dropPlacement(win.getBounds(), workArea(), workAreas())
+}
+
+const SETTLE_MS = 160
+
+/** Slide the widget into the slot it was dropped near rather than jumping there. */
+export function settleWidget(): void {
+  const win = getWindow('widget')
+  if (!win) return
+  const from = win.getBounds()
+  const to = widgetBounds()
+  if (from.width !== to.width || from.height !== to.height) return positionWidget()
+  const start = Date.now()
+  const timer = setInterval(() => {
+    if (win.isDestroyed()) return clearInterval(timer)
+    const t = Math.min(1, (Date.now() - start) / SETTLE_MS)
+    const k = 1 - (1 - t) ** 3
+    win.setBounds({ ...to, x: Math.round(from.x + (to.x - from.x) * k), y: Math.round(from.y + (to.y - from.y) * k) })
+    if (t >= 1) clearInterval(timer)
+  }, 16)
 }
 
 export function setWidgetEnabled(name: 'mini' | 'widget', enabled: boolean): void {

@@ -31,11 +31,14 @@ import { getSettings, updateSettings } from './store'
 import {
   applyOverlaySettings,
   broadcast,
+  dragWidget,
+  dropWidget,
   fadeToastOut,
   getWindow,
   positionToast,
   positionWidget,
   setWidgetEnabled,
+  settleWidget,
   showMainWindow,
   showToast,
   windowNameOf
@@ -337,6 +340,17 @@ export function setupIpc(): void {
     const name = windowNameOf(e.sender.id)
     const win = name ? getWindow(name) : undefined
     win?.setIgnoreMouseEvents(ignore, { forward: true })
+  })
+
+  ipcMain.on('widget:drag', (e, x: number, y: number) => {
+    if (windowNameOf(e.sender.id) === 'widget') dragWidget(Number(x), Number(y))
+  })
+  ipcMain.on('widget:drop', (e) => {
+    const placement = windowNameOf(e.sender.id) === 'widget' ? dropWidget() : undefined
+    if (!placement) return
+    broadcast('settings:changed', [updateSettings({ widget: { placement } })])
+    settleWidget()
+    positionToast()
   })
 
 
