@@ -450,6 +450,8 @@ export interface Settings {
   savedMixes: SavedMix[]
   /** Playlists hearted into Your Library, newest first. Kept here, not on the server, as navidroid does. */
   savedPlaylists: string[]
+  /** Playlists, radios and mixes hidden from Your Library and Home. Kept here, per install, as the hearts are. */
+  hiddenPlaylists: string[]
   /** Also match soundtrack wording in the album title, not just the genre tag. */
   soundtrackTitleMatch: boolean
   theme: ThemeName
@@ -478,6 +480,7 @@ export const defaultSettings: Settings = {
   artCacheMaxMb: 256,
   savedMixes: [],
   savedPlaylists: [],
+  hiddenPlaylists: [],
   soundtrackTitleMatch: true,
   theme: 'blue'
 }

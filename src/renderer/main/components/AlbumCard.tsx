@@ -12,7 +12,9 @@ import { nav, type View } from '../nav'
 import { albumRecent, albumSongs, playFrom, usePlayingState } from '../recents'
 import { playlistRecent } from '../playlists'
 import { loadPlaylist } from '../downloads'
+import { useContextMenu } from './ContextMenu'
 import { ServerMixCover } from './MixCover'
+import { PlaylistMenu } from './PlaylistMenu'
 import { SectionHeader } from './ui'
 
 /**
@@ -26,17 +28,22 @@ export function Card({
   subtitle,
   onOpen,
   onPlay,
+  onContextMenu,
   from,
-  round = false
+  round = false,
+  dim = false
 }: {
   art: React.ReactNode
   title: string
   subtitle: string
   onOpen: () => void
   onPlay?: () => Promise<void> | void
+  onContextMenu?: (e: React.MouseEvent) => void
   /** The `viewKey` the card opens; while the queue came from there, its button pauses and resumes. */
   from?: string
   round?: boolean
+  /** Drawn faded, the way hidden playlists are in Your Library. */
+  dim?: boolean
 }) {
   const [busy, setBusy] = useState(false)
   const { current, playing } = usePlayingState(from)
@@ -48,7 +55,11 @@ export function Card({
     void Promise.resolve(onPlay()).finally(() => setBusy(false))
   }
   return (
-    <div className="group min-w-0 cursor-pointer rounded-md p-3 transition hover:bg-white/[0.07]" onClick={onOpen}>
+    <div
+      className={`group min-w-0 cursor-pointer rounded-md p-3 transition hover:bg-white/[0.07] ${dim ? 'opacity-40' : ''}`}
+      onClick={onOpen}
+      onContextMenu={onContextMenu}
+    >
       <div className="relative">
         <div
           className={`aspect-square w-full overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.5)] ${round ? 'rounded-full' : 'rounded-md'}`}
@@ -116,27 +127,33 @@ export function ArtistCard({ artist }: { artist: ArtistID3 }) {
 }
 
 /** A playlist, or a NaviBeat/Explo mix drawn and titled the way the web UI shows it. */
-export function PlaylistCard({ playlist: p }: { playlist: Playlist }) {
+export function PlaylistCard({ playlist: p, dim }: { playlist: Playlist; dim?: boolean }) {
   const client = useClient()
   const mix = parseMix(p.name, p.comment)
+  const menu = useContextMenu()
   return (
-    <Card
-      art={
-        mix ? (
-          <ServerMixCover mix={mix} coverArt={p.coverArt} />
-        ) : (
-          <Cover id={p.coverArt} size={300} className="h-full w-full" rounded="" />
-        )
-      }
-      title={mix?.title ?? p.name}
-      subtitle={mix?.description ?? `By ${p.owner ?? 'you'}`}
-      onOpen={() => nav.go({ name: 'playlist', id: p.id })}
-      from={viewKey({ name: 'playlist', id: p.id })}
-      onPlay={async () => {
-        const songs = client ? (await loadPlaylist(client, p.id)).entry : []
-        if (songs.length) playFrom(songs, 0, playlistRecent(p))
-      }}
-    />
+    <>
+      <Card
+        art={
+          mix ? (
+            <ServerMixCover mix={mix} coverArt={p.coverArt} />
+          ) : (
+            <Cover id={p.coverArt} size={300} className="h-full w-full" rounded="" />
+          )
+        }
+        title={mix?.title ?? p.name}
+        subtitle={mix?.description ?? `By ${p.owner ?? 'you'}`}
+        onOpen={() => nav.go({ name: 'playlist', id: p.id })}
+        onContextMenu={menu.open}
+        dim={dim}
+        from={viewKey({ name: 'playlist', id: p.id })}
+        onPlay={async () => {
+          const songs = client ? (await loadPlaylist(client, p.id)).entry : []
+          if (songs.length) playFrom(songs, 0, playlistRecent(p))
+        }}
+      />
+      {menu.pos && <PlaylistMenu id={p.id} pos={menu.pos} onClose={menu.close} />}
+    </>
   )
 }
 

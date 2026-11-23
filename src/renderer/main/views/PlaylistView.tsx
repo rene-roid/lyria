@@ -1,4 +1,4 @@
-import { Heart, Shuffle } from 'lucide-react'
+import { Eye, EyeOff, Heart, Shuffle } from 'lucide-react'
 import { parseMix } from '@shared/navimix'
 import { useMemo, useState } from 'react'
 import { filterTracks, formatDuration } from '@shared/format'
@@ -8,7 +8,7 @@ import { Cover, useCoverColor } from '@renderer/shared/Cover'
 import { TrackList } from '../components/TrackList'
 import { ActionIcon, Empty, ErrorBox, Loading, PageTitle } from '../components/ui'
 import { playFrom } from '../recents'
-import { playlistRecent, toggleSavedPlaylist, useSavedPlaylists } from '../playlists'
+import { playlistRecent, toggleHiddenPlaylist, toggleSavedPlaylist, useHiddenPlaylists, useSavedPlaylists } from '../playlists'
 import { ServerMixCover } from '../components/MixCover'
 import { useAsync } from '../useAsync'
 import { DownloadButton } from '../components/DownloadButton'
@@ -23,6 +23,7 @@ export function PlaylistView({ id }: { id: string }) {
   const state = useAsync(`playlist:${id}`, () => (client ? loadPlaylist(client, id) : undefined), [client, id, offline])
   const coverColor = useCoverColor(state.data?.coverArt ?? state.data?.entry[0]?.coverArt)
   const saved = useSavedPlaylists().includes(id)
+  const hidden = useHiddenPlaylists().includes(id)
   const download = useDownload(downloadKey('playlist', id))
   const [query, setQuery] = useState('')
   const shown = useMemo(() => filterTracks(state.data?.entry ?? [], query), [state.data, query])
@@ -80,6 +81,13 @@ export function PlaylistView({ id }: { id: string }) {
               onClick={() => toggleSavedPlaylist(id)}
             >
               <Heart size={28} fill={saved ? 'currentColor' : 'none'} />
+            </ActionIcon>
+            <ActionIcon
+              title={hidden ? 'Show in Your Library' : 'Hide from Your Library'}
+              active={hidden}
+              onClick={() => toggleHiddenPlaylist(id)}
+            >
+              {hidden ? <Eye size={28} /> : <EyeOff size={28} />}
             </ActionIcon>
             <DownloadButton
               status={download}

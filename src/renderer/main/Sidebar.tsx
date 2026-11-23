@@ -3,6 +3,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Disc3,
+  EyeOff,
   Film,
   Heart,
   Home,
@@ -17,12 +18,12 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { downloadKey, viewKey } from '@shared/types'
-import { MIX_SECTIONS } from '@shared/navimix'
+import { MIX_SECTIONS, withoutHidden } from '@shared/navimix'
 import type { Playlist } from '@shared/subsonic/types'
 import { Cover } from '@renderer/shared/Cover'
 import { useClient } from '@renderer/shared/sessionStore'
 import { nav, useNav, type View } from './nav'
-import { playlists, savedFirst, useSavedPlaylists, useServerPlaylists } from './playlists'
+import { playlists, savedFirst, useHiddenPlaylists, useSavedPlaylists, useServerPlaylists } from './playlists'
 import { useSavedMixes } from './savedMixes'
 import { useDownload, useDownloads } from './downloads'
 import { useOffline } from './offline'
@@ -30,6 +31,8 @@ import { allAlbums } from './albumList'
 import { useAsync } from './useAsync'
 import { usePlayingState } from './recents'
 import { Chip } from './components/ui'
+import { useContextMenu } from './components/ContextMenu'
+import { PlaylistMenu } from './components/PlaylistMenu'
 import { LikedCover } from './components/AlbumCard'
 import { ServerMixCover } from './components/MixCover'
 import { TagArt } from './components/TagArt'
@@ -70,39 +73,45 @@ function LibraryRow({
     view.name === 'playlist' ? downloadKey('playlist', view.id) : view.name === 'savedMix' ? downloadKey('mix', view.id) : ''
   )
   const downloaded = download && download.done >= download.trackIds.length
-  // Offline, a playlist or mix that was never downloaded has little or nothing to play, so it steps back.
-  const dim = useOffline() && downloadable && !download
+  const isHidden = useHiddenPlaylists().includes(view.name === 'playlist' ? view.id : '')
+  const menu = useContextMenu()
+  // Offline, a playlist or mix that was never downloaded has little or nothing to play, so it steps back, as a hidden one does.
+  const dim = (useOffline() && downloadable && !download) || isHidden
   return (
-    <button
-      onClick={() => nav.go(view)}
-      // The Albums and Artists shelves are the whole library, so rows off screen are skipped.
-      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 64px' }}
-      className={`flex w-full items-center gap-3 rounded-md p-2 text-left transition ${
-        active ? 'bg-white/10 hover:bg-white/[0.14]' : 'hover:bg-white/[0.07]'
-      } ${dim ? 'opacity-40' : ''}`}
-    >
-      {art}
-      <div className="min-w-0 flex-1">
-        <div className={`truncate text-[15px] ${current ? 'text-accent' : ''}`} title={title}>
-          {title}
+    <>
+      <button
+        onClick={() => nav.go(view)}
+        onContextMenu={view.name === 'playlist' ? menu.open : undefined}
+        // The Albums and Artists shelves are the whole library, so rows off screen are skipped.
+        style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 64px' }}
+        className={`flex w-full items-center gap-3 rounded-md p-2 text-left transition ${
+          active ? 'bg-white/10 hover:bg-white/[0.14]' : 'hover:bg-white/[0.07]'
+        } ${dim ? 'opacity-40' : ''}`}
+      >
+        {art}
+        <div className="min-w-0 flex-1">
+          <div className={`truncate text-[15px] ${current ? 'text-accent' : ''}`} title={title}>
+            {title}
+          </div>
+          <div className="flex items-center gap-1 text-[13px] text-ink-2">
+            {saved && <Heart size={12} fill="currentColor" className="shrink-0 text-accent" aria-label="Saved" />}
+            {download && (
+              <span
+                className={`flex h-3 w-3 shrink-0 items-center justify-center rounded-full ${
+                  downloaded ? 'bg-accent text-black' : 'border border-ink-3 text-ink-3'
+                }`}
+                aria-label={downloaded ? 'Downloaded' : 'Downloading'}
+              >
+                <ArrowDown size={9} strokeWidth={3} />
+              </span>
+            )}
+            <span className="truncate">{subtitle}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-1 text-[13px] text-ink-2">
-          {saved && <Heart size={12} fill="currentColor" className="shrink-0 text-accent" aria-label="Saved" />}
-          {download && (
-            <span
-              className={`flex h-3 w-3 shrink-0 items-center justify-center rounded-full ${
-                downloaded ? 'bg-accent text-black' : 'border border-ink-3 text-ink-3'
-              }`}
-              aria-label={downloaded ? 'Downloaded' : 'Downloading'}
-            >
-              <ArrowDown size={9} strokeWidth={3} />
-            </span>
-          )}
-          <span className="truncate">{subtitle}</span>
-        </div>
-      </div>
-      {playing && <Volume2 size={16} className="mr-1 shrink-0 text-accent" aria-label="Playing" />}
-    </button>
+        {playing && <Volume2 size={16} className="mr-1 shrink-0 text-accent" aria-label="Playing" />}
+      </button>
+      {menu.pos && view.name === 'playlist' && <PlaylistMenu id={view.id} pos={menu.pos} onClose={menu.close} />}
+    </>
   )
 }
 
@@ -175,10 +184,11 @@ function ChipEdge({ side, onClick }: { side: 'left' | 'right'; onClick: () => vo
   )
 }
 
-type Shelf = 'playlists' | 'mixes' | 'albums' | 'artists'
+type Shelf = 'playlists' | 'radios' | 'mixes' | 'albums' | 'artists'
 
 const SHELVES: { key: Shelf; label: string }[] = [
   { key: 'playlists', label: 'Playlists' },
+  { key: 'radios', label: 'Radios' },
   { key: 'mixes', label: 'Mixes' },
   { key: 'albums', label: 'Albums' },
   { key: 'artists', label: 'Artists' }
@@ -193,10 +203,12 @@ function Library() {
   const client = useClient()
   const [shelf, setShelf] = useState<Shelf>('playlists')
   const [onlySaved, setOnlySaved] = useState(false)
+  const [showHidden, setShowHidden] = useState(false)
   // null while the filter box is folded away behind its icon.
   const [query, setQuery] = useState<string | null>(null)
   const lists = useServerPlaylists()
   const saved = useSavedPlaylists()
+  const hidden = useHiddenPlaylists()
   const keptMixes = useSavedMixes()
   const offline = useOffline()
   const downloaded = useDownloads()
@@ -228,12 +240,15 @@ function Library() {
 
   // Downloaded playlists missing from the server's list (it never loaded, or its cached copy is
   // gone) are listed off their downloads, so they can always be reached, server or no server.
-  const listed = new Set([...lists.own, ...lists.mixes].map((p) => p.id))
+  const listed = new Set([...lists.own, ...lists.radios, ...lists.mixes].map((p) => p.id))
   const unlisted: Playlist[] = downloaded
     .filter((d) => d.kind === 'playlist' && !listed.has(d.id))
     .map((d) => ({ id: d.id, name: d.title, coverArt: d.coverArt, songCount: d.trackIds.length }))
-  const own = keep(savedFirst([...lists.own, ...unlisted], saved), (p) => saved.includes(p.id))
-  const mixes = keep(savedFirst(lists.mixes, saved), (p) => saved.includes(p.id))
+  const listing = <T extends { id: string; name: string }>(items: T[]): T[] =>
+    keep(savedFirst(showHidden ? items : withoutHidden(items, hidden), saved), (p) => saved.includes(p.id))
+  const own = listing([...lists.own, ...unlisted])
+  const radios = listing(lists.radios)
+  const mixes = listing(lists.mixes)
   const kept = keptMixes.filter((m) => match(m.title))
   const albumRows = withStarred(starred.data?.albums, albums.data)
   const artistRows = withStarred(starred.data?.artists, artists.data)
@@ -268,6 +283,9 @@ function Library() {
         <Chip active={onlySaved} onClick={() => setOnlySaved(!onlySaved)} title="Only saved">
           <Heart size={14} fill={onlySaved ? 'currentColor' : 'none'} className="my-0.5" />
         </Chip>
+        <Chip active={showHidden} onClick={() => setShowHidden(!showHidden)} title="Show hidden playlists">
+          <EyeOff size={14} className="my-0.5" />
+        </Chip>
         {SHELVES.map((s) => (
           <Chip key={s.key} active={shelf === s.key} onClick={() => setShelf(s.key)}>
             {s.label}
@@ -289,7 +307,7 @@ function Library() {
         </div>
       )}
       {/* Keyed, so switching shelves starts the new one at the top. */}
-      <div key={`${shelf}:${onlySaved}`} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <div key={`${shelf}:${onlySaved}:${showHidden}`} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {/* Offline is not an error: what is on this device is listed regardless. */}
         {lists.error && !offline && (
           <div className="px-2 py-2 text-xs text-red-300">
@@ -321,6 +339,38 @@ function Library() {
               />
             ))}
             {onlySaved && !lists.loading && own.length === 0 && <Hint>Hit the heart on a playlist to keep it here.</Hint>}
+          </>
+        )}
+        {shelf === 'radios' && (
+          <>
+            {lists.loading && <Hint>Loading…</Hint>}
+            {radios.map((p) => (
+              <LibraryRow
+                key={p.id}
+                view={{ name: 'playlist', id: p.id }}
+                art={
+                  p.mix ? (
+                    <Thumb>
+                      <ServerMixCover mix={p.mix} coverArt={p.coverArt} />
+                    </Thumb>
+                  ) : (
+                    <Cover id={p.coverArt} size={96} className="h-12 w-12" />
+                  )
+                }
+                title={p.mix?.title ?? p.name}
+                subtitle={`Radio • ${p.mix?.by ?? p.owner ?? `${p.songCount ?? 0} songs`}`}
+                saved={saved.includes(p.id)}
+              />
+            ))}
+            {!lists.loading && radios.length === 0 && (
+              <Hint>
+                {onlySaved
+                  ? 'Hit the heart on a radio to keep it here.'
+                  : q
+                    ? 'Nothing matches'
+                    : 'No radios yet. Playlists called Radio, and the artist and genre radios of NaviBeat, show up here.'}
+              </Hint>
+            )}
           </>
         )}
         {shelf === 'mixes' && (
