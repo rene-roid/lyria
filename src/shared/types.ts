@@ -160,14 +160,22 @@ export interface ResumeState {
   queue: Track[]
   index: number
   position: number
+  /** Where autoplay's songs at the end of the queue begin, as in `PlayerState`. */
+  autoplayFrom: number
 }
 
-/** Clamp a persisted resume snapshot back into a usable range; null when there is nothing to resume. */
-export function sanitizeResume(r: ResumeState | null | undefined): ResumeState | null {
+/**
+ * Clamp a persisted resume snapshot back into a usable range; null when there is nothing to resume.
+ * Snapshots saved before autoplay have no `autoplayFrom` and come back with no autoplayed songs.
+ */
+export function sanitizeResume(r: Partial<ResumeState> | null | undefined): ResumeState | null {
   if (!r?.queue?.length) return null
-  const index = Math.min(Math.max(Math.trunc(r.index) || 0, 0), r.queue.length - 1)
-  const position = Number.isFinite(r.position) ? Math.max(0, r.position) : 0
-  return { queue: r.queue, index, position }
+  const length = r.queue.length
+  const index = Math.min(Math.max(Math.trunc(r.index ?? 0) || 0, 0), length - 1)
+  const position = Number.isFinite(r.position) ? Math.max(0, r.position ?? 0) : 0
+  const from = r.autoplayFrom ?? length
+  const autoplayFrom = Number.isInteger(from) ? Math.min(Math.max(from, 0), length) : length
+  return { queue: r.queue, index, position, autoplayFrom }
 }
 
 /**

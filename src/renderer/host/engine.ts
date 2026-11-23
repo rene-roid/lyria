@@ -216,6 +216,7 @@ export class AudioEngine {
     if (!resume) return
     this.queue = [...resume.queue]
     this.index = resume.index
+    for (const t of this.queue.slice(resume.autoplayFrom)) this.autoplayed.add(t)
     this.emitQueue()
     this.load(this.index, false, resume.position)
   }

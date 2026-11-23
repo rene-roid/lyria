@@ -246,6 +246,15 @@ describe('autoplay', () => {
     expect(audio.currentTime).toBe(0)
   })
 
+  test("a queue restored at launch keeps autoplay's songs apart from yours", () => {
+    const { send, queue } = start()
+    const resume = { queue: ['s1', 's2', 'a', 'b'].map(song), index: 0, position: 0, autoplayFrom: 2 }
+    engine.restore({ volume: 1, muted: false, repeat: 'off', shuffle: false, normalize: 'off', autoplay: true, resume })
+    expect(queue()).toBe('s1 s2 | a b')
+    send('addToQueue', { tracks: [song('c')] })
+    expect(queue()).toBe('s1 s2 c | a b')
+  })
+
   test('offline, only songs with a copy on this device are added', async () => {
     const { send, queue } = start(async () => [song('a'), song('b')])
     engine.setOnline(false)

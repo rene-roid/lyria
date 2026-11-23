@@ -1,5 +1,5 @@
 import Store from 'electron-store'
-import { defaultSettings, type Settings, type SettingsPatch } from '@shared/types'
+import { defaultSettings, sanitizeResume, type Settings, type SettingsPatch } from '@shared/types'
 import { sanitizeAurora, sanitizeBackground } from '@shared/aurora'
 import { clamp, sanitizeMini, sanitizeToast, sanitizeWidget } from './overlayOptions'
 
@@ -39,6 +39,7 @@ function readSettings(): Settings {
     aurora: sanitizeAurora(saved.aurora),
     windowBounds: { ...(saved.windowBounds ?? {}) },
     autoplay: typeof saved.autoplay === 'boolean' ? saved.autoplay : defaultSettings.autoplay,
+    resume: sanitizeResume(saved.resume),
     // Entries written before the shelf stored an origin have no key and cannot be played.
     recents: (saved.recents ?? []).filter((r) => r?.key),
     savedMixes: (saved.savedMixes ?? []).filter((m) => m?.id && m.tracks?.length),
