@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import type { RecentItem, Track } from '@shared/types'
 import type { Playlist } from '@shared/subsonic/types'
 import type { SubsonicClient } from '@shared/subsonic/client'
-import { parseMix, splitPlaylists } from '@shared/navimix'
+import { parseMix, shelfMixes, splitPlaylists, type MixPlaylist } from '@shared/navimix'
 import { useClient, useSessionStore } from '@renderer/shared/sessionStore'
 import { recentOf } from './recents'
 import { useAsync, type AsyncState } from './useAsync'
@@ -35,17 +35,32 @@ export const playlists = {
   }
 }
 
-/** The server's playlists, split into NaviBeat/Explo mixes (in the web UI's order) and the user's own. */
-export function useServerPlaylists(): AsyncState<Playlist[]> & ReturnType<typeof splitPlaylists> {
+/**
+ * The server's playlists, split into the user's own, radios and the other mixes (in the web UI's
+ * order). `shelves` is every mix those shelves show, NaviBeat's radios among them.
+ */
+export function useServerPlaylists(): AsyncState<Playlist[]> &
+  ReturnType<typeof splitPlaylists> & { shelves: MixPlaylist[] } {
   const client = useClient()
   const revision = usePlaylistsRevision()
   const state = useAsync('playlists', () => client?.getPlaylists(), [client, revision])
   const split = useMemo(() => splitPlaylists(state.data), [state.data])
-  return { ...state, ...split }
+  const shelves = useMemo(() => shelfMixes(split.radios, split.mixes), [split])
+  return { ...state, ...split, shelves }
 }
 
 export function useSavedPlaylists(): string[] {
   return useSessionStore((s) => s.settings.savedPlaylists)
+}
+
+export function useHiddenPlaylists(): string[] {
+  return useSessionStore((s) => s.settings.hiddenPlaylists)
+}
+
+/** Hide a playlist, radio or mix from Your Library and Home, or bring it back. Local to this install. */
+export function toggleHiddenPlaylist(id: string): void {
+  const hidden = useSessionStore.getState().settings.hiddenPlaylists
+  void window.lyria.settings.update({ hiddenPlaylists: hidden.includes(id) ? hidden.filter((h) => h !== id) : [id, ...hidden] })
 }
 
 /** Heart a playlist into Your Library, or take it back out. Local to this install. */

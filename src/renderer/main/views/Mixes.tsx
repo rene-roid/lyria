@@ -98,7 +98,7 @@ function SavedMixRow({ mixes }: { mixes: SavedMix[] }) {
 
 export function MixesView() {
   const saved = useSavedMixes()
-  const { mixes } = useServerPlaylists()
+  const { shelves: mixes } = useServerPlaylists()
   return (
     <div>
       <PageTitle

@@ -19,6 +19,8 @@ import type { ServerProbe } from '@shared/subsonic/client'
 import { clearCache } from '@renderer/shared/cache'
 import { Cover } from '@renderer/shared/Cover'
 import { downloads, useDownloads } from '../downloads'
+import type { RadioPlaylist } from '@shared/navimix'
+import { toggleHiddenPlaylist, useHiddenPlaylists, useServerPlaylists } from '../playlists'
 import { nav } from '../nav'
 import { useSessionStore, useSettings } from '@renderer/shared/sessionStore'
 import { GhostButton, PageTitle, Range, SectionHeader, Spinner } from '../components/ui'
@@ -622,6 +624,31 @@ function NormalizeSetting({ value, onChange }: { value: NormalizeMode; onChange:
 const downloadStats = (): Promise<CacheStats> => window.lyria.downloads.stats()
 
 /** Everything kept for offline listening, how far each has got, and a way to let it go. */
+/** What was hidden from Your Library and Home, with a way back for each. */
+function HiddenPlaylists() {
+  const hidden = useHiddenPlaylists()
+  const { own, radios, mixes } = useServerPlaylists()
+  const known = new Map<string, RadioPlaylist>([...own, ...radios, ...mixes].map((p) => [p.id, p]))
+  if (!hidden.length) return null
+  return (
+    <>
+      <div className="px-3 pt-4 pb-1 text-sm font-medium">Hidden playlists</div>
+      <ul>
+        {hidden.map((id) => {
+          const p = known.get(id)
+          return (
+            <li key={id} className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-white/[0.04]">
+              <Cover id={p?.coverArt} size={100} className="h-10 w-10 shrink-0" rounded="rounded" />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">{p?.mix?.title ?? p?.name ?? 'Unavailable playlist'}</span>
+              <GhostButton onClick={() => toggleHiddenPlaylist(id)}>Unhide</GhostButton>
+            </li>
+          )
+        })}
+      </ul>
+    </>
+  )
+}
+
 function DownloadsSection() {
   const list = useDownloads()
   const used = useCacheStats(downloadStats)
@@ -890,6 +917,7 @@ export function SettingsView() {
           checked={settings.soundtrackTitleMatch}
           onChange={(v) => update({ soundtrackTitleMatch: v })}
         />
+        <HiddenPlaylists />
       </section>
 
       <DownloadsSection />

@@ -1,5 +1,5 @@
 import { Shuffle } from 'lucide-react'
-import { daypart, MIX_SECTIONS, type MixPlaylist, type MixSection } from '@shared/navimix'
+import { daypart, MIX_SECTIONS, withoutHidden, type MixPlaylist, type MixSection } from '@shared/navimix'
 import { capitalize } from '@shared/format'
 import { useClient, useSessionStore, useSettings } from '@renderer/shared/sessionStore'
 import { player } from '@renderer/shared/playerStore'
@@ -16,7 +16,7 @@ import { nav } from '../nav'
 import { loadPlaylist, useDownloads } from '../downloads'
 import { useOffline, useOnDevice } from '../offline'
 import { useSavedMixes } from '../savedMixes'
-import { playlistRecent, savedFirst, useSavedPlaylists, useServerPlaylists } from '../playlists'
+import { playlistRecent, savedFirst, useHiddenPlaylists, useSavedPlaylists, useServerPlaylists } from '../playlists'
 import type { AlbumListType, Playlist } from '@shared/subsonic/types'
 import type { SubsonicClient } from '@shared/subsonic/client'
 import { viewKey, type DownloadStatus, type RecentItem, type SavedMix, type Track } from '@shared/types'
@@ -74,7 +74,8 @@ const QUICK = (hour: number): [string, string?][] => [
 const QUICK_TILES = 8
 
 function RecentGrid({ mixes }: { mixes: MixPlaylist[] }) {
-  const recents = useSettings().recents
+  const hidden = useHiddenPlaylists()
+  const recents = useSettings().recents.filter((r) => !(r.view?.name === 'playlist' && hidden.includes(r.view.id)))
   const mixOf = (it: RecentItem) => (it.view?.name === 'playlist' ? mixes.find((m) => m.id === (it.view as { id: string }).id) : undefined)
   const keys = new Set(recents.map((r) => r.key))
   const fill = QUICK(new Date().getHours())
@@ -134,12 +135,12 @@ function OfflineHome() {
   const list = useDownloads()
   const kept = useSavedMixes()
   // The cached copies, so a downloaded server mix keeps the title and artwork it has online.
-  const { mixes, own } = useServerPlaylists()
+  const { mixes, radios, own } = useServerPlaylists()
   const starred = useAsync('starred', () => client?.getStarred2(), [client])
   const liked = starred.data?.songs
   const likedHere = useOnDevice(liked)?.size ?? 0
 
-  const known = new Map<string, Playlist>([...mixes, ...own].map((p) => [p.id, p]))
+  const known = new Map<string, Playlist>([...mixes, ...radios, ...own].map((p) => [p.id, p]))
   const cards = list.flatMap((d) => {
     if (d.kind === 'playlist') {
       const p = known.get(d.id) ?? { id: d.id, name: d.title }
@@ -202,8 +203,16 @@ export function Home() {
 function OnlineHome() {
   const client = useClient()
   const username = useSessionStore((s) => s.session?.username)
-  const { mixes, own } = useServerPlaylists()
+  const lists = useServerPlaylists()
   const saved = useSavedPlaylists()
+  const hidden = useHiddenPlaylists()
+  const mixes = withoutHidden(lists.shelves, hidden)
+  const own = withoutHidden(lists.own, hidden)
+  // Radios NaviBeat did not write have no shelf of their own among the web UI's, so Home gives them one.
+  const radios = withoutHidden(
+    lists.radios.filter((r) => !r.mix),
+    hidden
+  )
   const part = daypart(new Date().getHours())
   const greeting = part === 'morning' ? 'Good morning' : part === 'afternoon' ? 'Good afternoon' : 'Good evening'
   return (
@@ -231,6 +240,9 @@ function OnlineHome() {
           title="Your playlists"
           items={savedFirst(own, saved).map((p) => <PlaylistCard key={p.id} playlist={p} />)}
         />
+      )}
+      {radios.length > 0 && (
+        <Shelf title="Your radios" items={savedFirst(radios, saved).map((p) => <PlaylistCard key={p.id} playlist={p} />)} />
       )}
       <MixShelf mixes={mixes} section="favorites" />
       <MixRow shelf />

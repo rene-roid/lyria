@@ -49,7 +49,8 @@ function readSettings(): Settings {
     windowBounds: { ...(saved.windowBounds ?? {}) },
     // Entries written before the shelf stored an origin have no key and cannot be played.
     recents: (saved.recents ?? []).filter((r) => r?.key),
-    savedMixes: (saved.savedMixes ?? []).filter((m) => m?.id && m.tracks?.length)
+    savedMixes: (saved.savedMixes ?? []).filter((m) => m?.id && m.tracks?.length),
+    hiddenPlaylists: (Array.isArray(saved.hiddenPlaylists) ? saved.hiddenPlaylists : []).filter((id) => typeof id === 'string')
   })
 }
 
