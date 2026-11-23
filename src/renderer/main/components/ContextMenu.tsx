@@ -72,6 +72,7 @@ export function ContextMenu({
   return createPortal(
     <div
       ref={ref}
+      data-context-menu
       style={{ left: placed.x, top: placed.y }}
       onContextMenu={(e) => e.preventDefault()}
       className="fixed z-50 max-h-[70vh] min-w-[220px] overflow-y-auto overscroll-contain rounded-lg border border-stroke bg-surface-3 p-1 text-[13px] shadow-2xl"

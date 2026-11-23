@@ -335,12 +335,12 @@ export class SubsonicClient {
 
   // ---- annotation ----------------------------------------------------------
 
-  star(id: string, kind: 'song' | 'album' | 'artist' = 'song'): Promise<unknown> {
+  star(id: string | string[], kind: 'song' | 'album' | 'artist' = 'song'): Promise<unknown> {
     const key = kind === 'song' ? 'id' : kind === 'album' ? 'albumId' : 'artistId'
     return this.call('star', { [key]: id })
   }
 
-  unstar(id: string, kind: 'song' | 'album' | 'artist' = 'song'): Promise<unknown> {
+  unstar(id: string | string[], kind: 'song' | 'album' | 'artist' = 'song'): Promise<unknown> {
     const key = kind === 'song' ? 'id' : kind === 'album' ? 'albumId' : 'artistId'
     return this.call('unstar', { [key]: id })
   }

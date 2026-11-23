@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   Disc3,
@@ -24,7 +24,8 @@ import { useOffline, useOnDevice } from '../offline'
 import { playFrom } from '../recents'
 import { playlists, usePlaylistsRevision } from '../playlists'
 import { useAsync } from '../useAsync'
-import { ContextMenu, MenuItem, MenuLabel, MenuSeparator, useContextMenu } from './ContextMenu'
+import { clickAction, noSelection, rowKeys, select, selectedIndexes, type SelectAction } from '../selection'
+import { ContextMenu, MenuItem, MenuLabel, MenuSeparator, useContextMenu, type MenuPos } from './ContextMenu'
 import { ArtistLinks, creditsOf } from './ArtistLinks'
 
 export function TrackList({
@@ -44,8 +45,8 @@ export function TrackList({
   numbered?: boolean
   /** Insert a "Disc N" heading per disc. Ignored when the tracks all sit on one disc. */
   discs?: boolean
-  /** Given, the context menu offers a removal entry for the row at `index`. */
-  onRemove?: (index: number) => void
+  /** Given, the context menu offers a removal entry for the rows at `indexes`, in list order. */
+  onRemove?: (indexes: number[]) => void
   removeLabel?: string
   /** The page these rows belong to, for Home's shelf. Omitted, a row counts as a song on its own. */
   origin?: RecentItem | null
@@ -60,6 +61,29 @@ export function TrackList({
   const local = useOnDevice(tracks)
   const menu = useContextMenu()
   const [menuIndex, setMenuIndex] = useState(0)
+  const listRef = useRef<HTMLDivElement>(null)
+  const keys = useMemo(() => rowKeys(tracks), [tracks])
+  const [selection, setSelection] = useState(noSelection)
+  // Both mirrored so `choose` and `onMenu` keep one identity for the memoised rows.
+  const keysRef = useRef(keys)
+  keysRef.current = keys
+  const selectionRef = useRef(selection)
+  selectionRef.current = selection
+  const choose = useCallback((a: SelectAction) => setSelection((s) => select(s, a, keysRef.current)), [])
+  const onSelect = useCallback((e: React.MouseEvent, index: number) => choose(clickAction(e, index)), [choose])
+  useEffect(() => choose({ type: 'sync' }), [keys, choose])
+
+  const hasSelection = selection.keys.size > 0
+  useEffect(() => {
+    if (!hasSelection) return
+    const outside = (e: PointerEvent): void => {
+      const target = e.target as Element
+      // The row menu sits in a portal, so pressing one of its items is not a press outside the list.
+      if (!listRef.current?.contains(target) && !target.closest('[data-context-menu]')) choose({ type: 'clear' })
+    }
+    window.addEventListener('pointerdown', outside)
+    return () => window.removeEventListener('pointerdown', outside)
+  }, [hasSelection, choose])
   // Server state only refreshes on reload, so remember toggles made here.
   const [starred, setStarred] = useState<Record<string, boolean>>({})
   // Mirrored in a ref so toggling reads the latest map without `starred` in the callback's deps,
@@ -86,10 +110,12 @@ export function TrackList({
   const onPlay = useCallback((index: number) => playFrom(tracks, index, origin, from), [tracks, origin, from])
   const onMenu = useCallback(
     (e: React.MouseEvent, index: number) => {
+      // As in Spotify, right-clicking a row outside the selection makes that row the selection.
+      if (!selectionRef.current.keys.has(keysRef.current[index])) choose({ type: 'click', index })
       setMenuIndex(index)
       menu.open(e)
     },
-    [menu.open]
+    [menu.open, choose]
   )
 
   const multiDisc = useMemo(
@@ -97,10 +123,39 @@ export function TrackList({
     [discs, tracks]
   )
 
+  const setStarredAll = async (ts: Track[], next: boolean): Promise<void> => {
+    const ids = [...new Set(ts.filter((t) => isStarred(t) !== next).map((t) => t.id))]
+    if (!client || !ids.length) return
+    const mark = (value: boolean): void => setStarred((s) => ({ ...s, ...Object.fromEntries(ids.map((id) => [id, value])) }))
+    mark(next)
+    try {
+      await (next ? client.star(ids) : client.unstar(ids))
+    } catch {
+      mark(!next)
+    }
+  }
+
+  const onKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Escape') choose({ type: 'clear' })
+    else if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      choose({ type: 'all' })
+    }
+  }
+
+  // Only worked out while the menu is open, since a long list re-renders on every play and pause.
+  const chosen = menu.pos ? selectedIndexes(selection, keys) : []
+  const chosenTracks = chosen.map((i) => tracks[i])
+
   if (!tracks.length) return <div className="py-10 text-center text-sm text-ink-3">No tracks</div>
 
   return (
-    <div className="text-sm">
+    <div
+      ref={listRef}
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      className="rounded-md text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+    >
       <div className="grid grid-cols-[40px_1fr_auto] items-center gap-3 border-b border-stroke px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-ink-3 md:grid-cols-[40px_1fr_1fr_110px_60px]">
         <div className="text-center">#</div>
         <div>Title</div>
@@ -116,6 +171,7 @@ export function TrackList({
             track={t}
             index={i}
             isCurrent={t.id === currentId}
+            selected={selection.keys.has(keys[i])}
             playing={playing}
             starred={isStarred(t)}
             showAlbum={showAlbum}
@@ -124,6 +180,7 @@ export function TrackList({
             canStar={Boolean(client) && !offline}
             unavailable={local !== null && !local.has(t.id)}
             onPlay={onPlay}
+            onSelect={onSelect}
             onMenu={onMenu}
             onToggleStar={toggleStar}
           />
@@ -138,7 +195,25 @@ export function TrackList({
           </div>
         )
       })}
-      {menu.pos && tracks[menuIndex] && (
+      {menu.pos && chosen.length > 1 && (
+        <SelectionMenu
+          pos={menu.pos}
+          tracks={chosenTracks}
+          playable={chosenTracks.filter((t) => local === null || local.has(t.id))}
+          starred={chosenTracks.every(isStarred)}
+          onClose={menu.close}
+          onStar={(next) => void setStarredAll(chosenTracks, next)}
+          onRemove={
+            onRemove &&
+            (() => {
+              onRemove(chosen)
+              choose({ type: 'clear' })
+            })
+          }
+          removeLabel={removeLabel}
+        />
+      )}
+      {menu.pos && chosen.length < 2 && tracks[menuIndex] && (
         <TrackMenu
           pos={menu.pos}
           track={tracks[menuIndex]}
@@ -147,7 +222,7 @@ export function TrackList({
           onClose={menu.close}
           onPlay={() => playFrom(tracks, menuIndex, origin, from)}
           onToggleStar={() => void toggleStar(tracks[menuIndex])}
-          onRemove={onRemove && (() => onRemove(menuIndex))}
+          onRemove={onRemove && (() => onRemove([menuIndex]))}
           removeLabel={removeLabel}
         />
       )}
@@ -167,6 +242,7 @@ const TrackRow = memo(function TrackRow({
   track: t,
   index: i,
   isCurrent,
+  selected,
   playing,
   starred: fav,
   showAlbum,
@@ -175,12 +251,14 @@ const TrackRow = memo(function TrackRow({
   canStar,
   unavailable,
   onPlay,
+  onSelect,
   onMenu,
   onToggleStar
 }: {
   track: Track
   index: number
   isCurrent: boolean
+  selected: boolean
   playing: boolean
   starred: boolean
   showAlbum: boolean
@@ -190,16 +268,24 @@ const TrackRow = memo(function TrackRow({
   /** Offline with no copy of the song on this device: shown greyed out, and it does not start. */
   unavailable: boolean
   onPlay: (index: number) => void
+  onSelect: (e: React.MouseEvent, index: number) => void
   onMenu: (e: React.MouseEvent, index: number) => void
   onToggleStar: (track: Track) => void
 }) {
   return (
     <div
+      // A press on one of the row's own buttons or links is for that, not for picking the row.
+      onClick={(e) => !(e.target as Element).closest('button, a') && onSelect(e, i)}
+      // Shift-clicking a range would otherwise also select the text across it.
+      onMouseDown={(e) => e.shiftKey && e.preventDefault()}
       onDoubleClick={() => !unavailable && onPlay(i)}
       onContextMenu={(e) => onMenu(e, i)}
+      data-selected={selected || undefined}
       title={unavailable ? 'Not on this device; plays once Lyria can reach your server' : undefined}
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 56px' }}
-      className={`group grid grid-cols-[40px_1fr_auto] items-center gap-3 rounded-md px-3 py-1.5 hover:bg-white/[0.06] md:grid-cols-[40px_1fr_1fr_110px_60px] ${
+      className={`group grid grid-cols-[40px_1fr_auto] items-center gap-3 rounded-md px-3 py-1.5 md:grid-cols-[40px_1fr_1fr_110px_60px] ${
+        selected ? 'bg-white/[0.12]' : 'hover:bg-white/[0.06]'
+      } ${
         isCurrent ? 'text-accent' : ''
       } ${unavailable ? 'opacity-40' : ''}`}
     >
@@ -296,20 +382,9 @@ export function TrackMenu({
   const [pick, setPick] = useState<'playlist' | 'artist' | null>(null)
   const picking = pick === 'playlist'
   const credits = creditsOf(track)
-  // Already warm from the sidebar's copy of the same key, so the picker opens without a wait.
-  const revision = usePlaylistsRevision()
-  const picked = useAsync('playlists', () => (picking ? client?.getPlaylists() : undefined), [client, picking, revision])
-
-  // A NaviBeat or Explo mix is rewritten by its plugin, so a song added to one would not stay.
-  const ownLists = picked.data?.filter((p) => !parseMix(p.name, p.comment))
 
   const run = (fn: () => void) => () => {
     fn()
-    onClose()
-  }
-
-  const addTo = (id: string): void => {
-    void client?.updatePlaylist(id, { songIdToAdd: [track.id] })
     onClose()
   }
 
@@ -328,24 +403,7 @@ export function TrackMenu({
           ))}
         </>
       ) : picking ? (
-        <>
-          <MenuItem icon={<ArrowLeft size={14} />} onClick={() => setPick(null)}>
-            Add to playlist
-          </MenuItem>
-          <MenuSeparator />
-          <MenuItem icon={<Plus size={14} />} onClick={run(() => playlists.newPlaylist([track]))}>
-            New playlist…
-          </MenuItem>
-          <MenuSeparator />
-          {picked.loading && <MenuLabel>Loading…</MenuLabel>}
-          {picked.error && <MenuLabel>{picked.error}</MenuLabel>}
-          {ownLists?.length === 0 && <MenuLabel>No playlists</MenuLabel>}
-          {ownLists?.map((p) => (
-            <MenuItem key={p.id} icon={<ListMusic size={14} />} onClick={() => addTo(p.id)}>
-              {p.name}
-            </MenuItem>
-          ))}
-        </>
+        <PlaylistPicker tracks={[track]} onBack={() => setPick(null)} onClose={onClose} />
       ) : (
         <>
           <MenuLabel>{track.title}</MenuLabel>
@@ -396,5 +454,119 @@ export function TrackMenu({
         </>
       )}
     </ContextMenu>
+  )
+}
+
+/** The menu for two or more selected rows; every entry acts on all of them, in list order. */
+function SelectionMenu({
+  pos,
+  tracks,
+  playable,
+  starred,
+  onClose,
+  onStar,
+  onRemove,
+  removeLabel
+}: {
+  pos: MenuPos
+  tracks: Track[]
+  /** The ones there is something to play for: offline, only those on this device. */
+  playable: Track[]
+  /** Whether every one of them is already liked. */
+  starred: boolean
+  onClose: () => void
+  onStar: (next: boolean) => void
+  onRemove?: () => void
+  removeLabel: string
+}) {
+  const client = useClient()
+  const offline = useOffline()
+  const [picking, setPicking] = useState(false)
+  const none = playable.length === 0
+
+  const run = (fn: () => void) => () => {
+    fn()
+    onClose()
+  }
+
+  return (
+    <ContextMenu pos={pos} onClose={onClose}>
+      {picking ? (
+        <PlaylistPicker tracks={tracks} onBack={() => setPicking(false)} onClose={onClose} />
+      ) : (
+        <>
+          <MenuLabel>{tracks.length} songs</MenuLabel>
+          <MenuItem icon={<Play size={14} />} onClick={run(() => playFrom(playable, 0, null))} disabled={none}>
+            Play
+          </MenuItem>
+          <MenuItem icon={<ListEnd size={14} />} onClick={run(() => player.addToQueue(playable, true))} disabled={none}>
+            Play next
+          </MenuItem>
+          <MenuItem icon={<ListPlus size={14} />} onClick={run(() => player.addToQueue(playable))} disabled={none}>
+            Add to queue
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem icon={<Plus size={14} />} onClick={() => setPicking(true)} disabled={!client || offline} hint="›">
+            Add to playlist
+          </MenuItem>
+          <MenuItem
+            icon={starred ? <HeartOff size={14} /> : <Heart size={14} />}
+            onClick={run(() => onStar(!starred))}
+            disabled={!client || offline}
+          >
+            {starred ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+          </MenuItem>
+          {onRemove && (
+            <>
+              <MenuSeparator />
+              <MenuItem icon={<Trash2 size={14} />} onClick={run(onRemove)} danger>
+                {removeLabel}
+              </MenuItem>
+            </>
+          )}
+        </>
+      )}
+    </ContextMenu>
+  )
+}
+
+function PlaylistPicker({ tracks, onBack, onClose }: { tracks: Track[]; onBack: () => void; onClose: () => void }) {
+  const client = useClient()
+  // Already warm from the sidebar's copy of the same key, so the picker opens without a wait.
+  const revision = usePlaylistsRevision()
+  const picked = useAsync('playlists', () => client?.getPlaylists(), [client, revision])
+  // A NaviBeat or Explo mix is rewritten by its plugin, so a song added to one would not stay.
+  const ownLists = picked.data?.filter((p) => !parseMix(p.name, p.comment))
+
+  const addTo = (id: string): void => {
+    void client?.updatePlaylist(id, { songIdToAdd: tracks.map((t) => t.id) })
+    onClose()
+  }
+
+  return (
+    <>
+      <MenuItem icon={<ArrowLeft size={14} />} onClick={onBack}>
+        Add to playlist
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem
+        icon={<Plus size={14} />}
+        onClick={() => {
+          playlists.newPlaylist(tracks)
+          onClose()
+        }}
+      >
+        New playlist…
+      </MenuItem>
+      <MenuSeparator />
+      {picked.loading && <MenuLabel>Loading…</MenuLabel>}
+      {picked.error && <MenuLabel>{picked.error}</MenuLabel>}
+      {ownLists?.length === 0 && <MenuLabel>No playlists</MenuLabel>}
+      {ownLists?.map((p) => (
+        <MenuItem key={p.id} icon={<ListMusic size={14} />} onClick={() => addTo(p.id)}>
+          {p.name}
+        </MenuItem>
+      ))}
+    </>
   )
 }
